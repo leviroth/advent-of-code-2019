@@ -1,5 +1,4 @@
-include Core
-include Int.Replace_polymorphic_compare
+open! Core
 
 module Int_pair = struct
   include Tuple.Make (Int) (Int)
