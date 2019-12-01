@@ -25,6 +25,33 @@ module Part = struct
                let input_file = sprintf "./input/day%02d.txt" day_of_month in
                solve_file input_file |> printf "%s\n")) )
     ;;
+
+    module For_testing = struct
+      let run = List.iter ~f:(Fn.compose print_endline solve_input)
+    end
+  end
+
+  module Make_with_alternatives (Solution : Part_intf.Basic_with_alternatives) = struct
+    include Make (Solution)
+
+    module For_testing = struct
+      let run =
+        List.iter ~f:(fun input ->
+            let input = Input.of_string input in
+            let main_output = solve input in
+            List.iter Solution.Alternatives.solutions ~f:(fun alternative ->
+                let alternative_output = alternative input in
+                match Output.equal main_output alternative_output with
+                | true -> ()
+                | false ->
+                  raise_s
+                    [%message
+                      "Main and alternative solutions did not match"
+                        (main_output : Output.t)
+                        (alternative_output : Output.t)]);
+            print_endline (Output.to_string main_output))
+      ;;
+    end
   end
 end
 

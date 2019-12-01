@@ -19,8 +19,7 @@ include Solution.Day.Make (struct
   end)
 
   let%expect_test "Part 1" =
-    [ "12"; "14"; "1969"; "100756" ]
-    |> List.iter ~f:(Fn.compose print_endline Part_1.solve_input);
+    Part_1.For_testing.run [ "12"; "14"; "1969"; "100756" ];
     [%expect {|
       2
       2
@@ -28,7 +27,7 @@ include Solution.Day.Make (struct
       33583 |}]
   ;;
 
-  module Part_2 = Solution.Part.Make (struct
+  module Part_2 = Solution.Part.Make_with_alternatives (struct
     include Common
 
     let one_based_index = 2
@@ -44,11 +43,23 @@ include Solution.Day.Make (struct
     ;;
 
     let solve = List.sum (module Int) ~f:fuel_requirement_accounting_for_extra
+
+    module Alternatives = struct
+      let solutions =
+        [ (let rec fuel_requirement_accounting_for_extra n =
+             match max 0 (Common.fuel_requirement n) with
+             | 0 -> 0
+             | required_fuel ->
+               required_fuel + fuel_requirement_accounting_for_extra required_fuel
+           in
+           List.sum (module Int) ~f:fuel_requirement_accounting_for_extra)
+        ]
+      ;;
+    end
   end)
 
-  let%expect_test "Part 1" =
-    [ "12"; "14"; "1969"; "100756" ]
-    |> List.iter ~f:(Fn.compose print_endline Part_2.solve_input);
+  let%expect_test "Part 2" =
+    Part_2.For_testing.run [ "12"; "14"; "1969"; "100756" ];
     [%expect {|
       2
       2
