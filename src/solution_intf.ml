@@ -14,14 +14,13 @@ module Part_intf = struct
 
     val one_based_index : int
     val solve : Input.t -> Output.t
+    val test_cases : string list
   end
 
   module type Basic_with_alternatives = sig
     include Basic
 
-    module Alternatives : sig
-      val solutions : (Input.t -> Output.t) list
-    end
+    val alternatives : (Input.t -> Output.t) list
   end
 
   module type S = sig
@@ -32,7 +31,7 @@ module Part_intf = struct
     val command : day_of_month:int -> string * Command.t
 
     module For_testing : sig
-      val run : string list -> unit
+      val run : unit -> unit
     end
   end
 
