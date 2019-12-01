@@ -19,9 +19,9 @@ include Solution.Day.Make (struct
   end)
 
   let%expect_test "Part 1" =
-    let part_1_test_cases = [ "12"; "14"; "1969"; "100756" ] in
-    List.iter part_1_test_cases ~f:(Fn.compose print_endline Part_1.solve_input);
-    [%expect{|
+    [ "12"; "14"; "1969"; "100756" ]
+    |> List.iter ~f:(Fn.compose print_endline Part_1.solve_input);
+    [%expect {|
       2
       2
       654
@@ -47,9 +47,9 @@ include Solution.Day.Make (struct
   end)
 
   let%expect_test "Part 1" =
-    let part_1_test_cases = [ "12"; "14"; "1969"; "100756" ] in
-    List.iter part_1_test_cases ~f:(Fn.compose print_endline Part_2.solve_input);
-    [%expect{|
+    [ "12"; "14"; "1969"; "100756" ]
+    |> List.iter ~f:(Fn.compose print_endline Part_2.solve_input);
+    [%expect {|
       2
       2
       966
