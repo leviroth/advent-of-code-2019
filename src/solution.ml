@@ -32,14 +32,14 @@ module Day = struct
   include Day_intf
 
   module Make (Day : Day_intf.Basic) = struct
-    let day_of_month = Day.day_of_month
+    include Day
 
     let command =
       let day_string = pad_int day_of_month in
       ( day_string
       , Command.group
           ~summary:(sprintf "day %s solutions" day_string)
-          (List.map Day.parts ~f:(fun (module Part : Part_intf.S) ->
+          (List.map parts ~f:(fun (module Part : Part_intf.S) ->
                Part.command ~day_of_month)) )
     ;;
   end

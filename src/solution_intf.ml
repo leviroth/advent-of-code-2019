@@ -39,7 +39,8 @@ module Day_intf = struct
   end
 
   module type S = sig
-    val day_of_month : int
+    include Basic
+
     val command : string * Command.t
   end
 
