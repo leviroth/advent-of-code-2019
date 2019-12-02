@@ -9,7 +9,6 @@ include Solution.Day.Make (struct
     module Output = Int
 
     let fuel_requirement n = (n / 3) - 2
-    let test_cases = [ "12"; "14"; "1969"; "100756" ]
   end
 
   module Part_1 = Solution.Part.Make (struct
@@ -20,7 +19,7 @@ include Solution.Day.Make (struct
   end)
 
   let%expect_test "Part 1" =
-    Part_1.For_testing.run ();
+    Part_1.For_testing.run [ "12"; "14"; "1969"; "100756" ];
     [%expect {|
       2
       2
@@ -45,20 +44,22 @@ include Solution.Day.Make (struct
 
     let solve = List.sum (module Int) ~f:fuel_requirement_accounting_for_extra
 
-    let alternatives =
-      [ (let rec fuel_requirement_accounting_for_extra n =
-           match max 0 (Common.fuel_requirement n) with
-           | 0 -> 0
-           | required_fuel ->
-             required_fuel + fuel_requirement_accounting_for_extra required_fuel
-         in
-         List.sum (module Int) ~f:fuel_requirement_accounting_for_extra)
-      ]
-    ;;
+    module Alternatives = struct
+      let solutions =
+        [ (let rec fuel_requirement_accounting_for_extra n =
+             match max 0 (Common.fuel_requirement n) with
+             | 0 -> 0
+             | required_fuel ->
+               required_fuel + fuel_requirement_accounting_for_extra required_fuel
+           in
+           List.sum (module Int) ~f:fuel_requirement_accounting_for_extra)
+        ]
+      ;;
+    end
   end)
 
   let%expect_test "Part 2" =
-    Part_2.For_testing.run ();
+    Part_2.For_testing.run [ "12"; "14"; "1969"; "100756" ];
     [%expect {|
       2
       2

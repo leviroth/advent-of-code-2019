@@ -27,7 +27,7 @@ module Part = struct
     ;;
 
     module For_testing = struct
-      let run () = List.iter test_cases ~f:(Fn.compose print_endline solve_input)
+      let run = List.iter ~f:(Fn.compose print_endline solve_input)
     end
   end
 
@@ -35,11 +35,11 @@ module Part = struct
     include Make (Solution)
 
     module For_testing = struct
-      let run () =
-        List.iter test_cases ~f:(fun input ->
+      let run =
+        List.iter ~f:(fun input ->
             let input = Input.of_string input in
             let main_output = solve input in
-            List.iter Solution.alternatives ~f:(fun alternative ->
+            List.iter Solution.Alternatives.solutions ~f:(fun alternative ->
                 let alternative_output = alternative input in
                 match Output.equal main_output alternative_output with
                 | true -> ()
