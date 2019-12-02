@@ -2,7 +2,7 @@ open! Core
 open! Import
 
 module type Output = sig
-  type t [@@deriving equal, sexp]
+  type t
 
   val to_string : t -> string
 end
@@ -16,35 +16,19 @@ module Part_intf = struct
     val solve : Input.t -> Output.t
   end
 
-  module type Basic_with_alternatives = sig
-    include Basic
-
-    module Alternatives : sig
-      val solutions : (Input.t -> Output.t) list
-    end
-  end
-
   module type S = sig
     include Basic
 
     val solve_file : string -> string
     val solve_input : string -> string
     val command : day_of_month:int -> string * Command.t
-
-    module For_testing : sig
-      val run : string list -> unit
-    end
   end
 
   module type Part = sig
     module type Basic = Basic
     module type S = S
 
-    module Make (Basic : Basic) :
-      S with type Input.t = Basic.Input.t with type Output.t = Basic.Output.t
-
-    module Make_with_alternatives (Basic : Basic_with_alternatives) :
-      S with type Input.t = Basic.Input.t with type Output.t = Basic.Output.t
+    module Make : functor (_ : Basic) -> S
   end
 end
 
