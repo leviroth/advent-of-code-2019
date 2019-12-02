@@ -1,7 +1,7 @@
 open! Core
 open! Import
 
-let days : (module Solution.Day.S) list = [ (module Day01) ]
+let days : (module Solution.Day.S) list = [ (module Day01); (module Day02) ]
 
 let command =
   Command.group

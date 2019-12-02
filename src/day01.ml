@@ -46,7 +46,7 @@ include Solution.Day.Make (struct
     let solve = List.sum (module Int) ~f:fuel_requirement_accounting_for_extra
   end)
 
-  let%expect_test "Part 1" =
+  let%expect_test "Part 2" =
     [ "12"; "14"; "1969"; "100756" ]
     |> List.iter ~f:(Fn.compose print_endline Part_2.solve_input);
     [%expect {|
