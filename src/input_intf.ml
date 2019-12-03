@@ -1,14 +1,14 @@
 open! Import
 
 module type S = sig
-  type t
+  type t [@@deriving sexp]
 
   val of_string : string -> t
   val load : string -> t
 end
 
 module type Parser = sig
-  type t
+  type t [@@deriving sexp]
 
   val parser : t Angstrom.t
 end

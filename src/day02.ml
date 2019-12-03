@@ -3,7 +3,7 @@ open! Import
 
 module Common = struct
   module Input = Input.Make_parseable (struct
-    type t = int list
+    type t = int list [@@deriving sexp]
 
     let parser =
       let open Angstrom in
