@@ -88,11 +88,16 @@ module Input = struct
 end
 
 let visited_points steps =
-  let points = Int_pair.Hash_set.create () in
+  let points = Int_pair.Table.create () in
+  let number_of_steps = ref 0 in
   let run_one point ({ direction; distance } : Input.Step.t) =
-    List.range ~stop:`inclusive 0 distance
+    List.range ~stop:`inclusive 1 distance
     |> List.iter ~f:(fun distance ->
-           Input.Direction.add direction distance point |> Hash_set.add points);
+           incr number_of_steps;
+           Input.Direction.add direction distance point
+           |> Hashtbl.update points ~f:(function
+                  | None -> !number_of_steps
+                  | Some n -> n));
     Input.Direction.add direction distance point
   in
   let (_ : Int_pair.t) = List.fold steps ~init:(0, 0) ~f:run_one in
@@ -105,10 +110,15 @@ let%expect_test _ =
     sep_by (char ',') Input.Step.parser
   in
   let case = Angstrom.parse_string parser "R8,U5,L5,D3" |> Result.ok_or_failwith in
-  visited_points case |> [%sexp_of: Int_pair.Hash_set.t] |> print_s;
-  [%expect{|
-    ((0 0) (1 0) (2 0) (3 0) (3 2) (3 3) (3 4) (3 5) (4 0) (4 5) (5 0) (5 5)
-     (6 0) (6 5) (7 0) (7 5) (8 0) (8 1) (8 2) (8 3) (8 4) (8 5)) |}]
+  visited_points case
+  |> Hashtbl.keys
+  |> List.sort ~compare:Int_pair.compare
+  |> [%sexp_of: Int_pair.t list]
+  |> print_s;
+  [%expect
+    {|
+    ((1 0) (2 0) (3 0) (3 2) (3 3) (3 4) (3 5) (4 0) (4 5) (5 0) (5 5) (6 0)
+     (6 5) (7 0) (7 5) (8 0) (8 1) (8 2) (8 3) (8 4) (8 5)) |}]
 ;;
 
 let manhattan_distance (x, y) = abs x + abs y
@@ -123,6 +133,9 @@ include Solution.Day.Make (struct
     let one_based_index = 1
 
     let solve (steps_a, steps_b) =
+      let visited_points steps =
+        visited_points steps |> Hashtbl.keys |> Int_pair.Hash_set.of_list
+      in
       let points_a = visited_points steps_a in
       let points_b = visited_points steps_b in
       let intersection_without_origin =
@@ -142,9 +155,41 @@ include Solution.Day.Make (struct
       U7,R6,D4,L4
     |} in
       Input.of_string case |> solve |> [%sexp_of: int] |> print_s;
-      [%expect{| 6 |}]
+      [%expect {| 6 |}]
     ;;
   end)
 
-  let parts : (module Solution.Part.S) list = [ (module Part_1) ]
+  module Part_2 = Solution.Part.Make (struct
+    module Input = Input
+    module Output = Int
+
+    let one_based_index = 2
+
+    let solve (steps_a, steps_b) =
+      let distances_a = visited_points steps_a in
+      let distances_b = visited_points steps_b in
+      let intersection_without_origin =
+        let points distances = Hashtbl.keys distances |> Int_pair.Hash_set.of_list in
+        let result = Hash_set.inter (points distances_a) (points distances_b) in
+        Hash_set.remove result (0, 0);
+        result
+      in
+      Hash_set.to_list intersection_without_origin
+      |> List.map ~f:(fun point ->
+             Hashtbl.find_exn distances_a point + Hashtbl.find_exn distances_b point)
+      |> List.min_elt ~compare
+      |> Option.value_exn
+    ;;
+
+    let%expect_test "Part 2" =
+      let case = {|
+      R8,U5,L5,D3
+      U7,R6,D4,L4
+    |} in
+      Input.of_string case |> solve |> [%sexp_of: int] |> print_s;
+      [%expect {| 30 |}]
+    ;;
+  end)
+
+  let parts : (module Solution.Part.S) list = [ (module Part_1); (module Part_2) ]
 end)
