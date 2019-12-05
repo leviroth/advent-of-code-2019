@@ -98,9 +98,8 @@ let has_strict_double n =
       | Some (current_element, count) ->
         (match count, Char.equal current_element hd with
         | 2, false -> true
-        | 2, true -> loop tl (Some (hd, count + 1))
-        | _, false -> loop tl (Some (hd, 1))
-        | _, true -> loop tl (Some (hd, count + 1))))
+        | _, true -> loop tl (Some (hd, count + 1))
+        | _, false -> loop tl (Some (hd, 1))))
   in
   let list = to_char_list n in
   loop list None
