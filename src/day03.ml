@@ -121,7 +121,8 @@ let%expect_test _ =
      (6 5) (7 0) (7 5) (8 0) (8 1) (8 2) (8 3) (8 4) (8 5)) |}]
 ;;
 
-let manhattan_distance (x, y) = abs x + abs y
+let manhattan_distance (a, b) = abs a + abs b
+let map_pair (x, y) ~f = f x, f y
 
 include Solution.Day.Make (struct
   let day_of_month = 3
@@ -132,12 +133,11 @@ include Solution.Day.Make (struct
 
     let one_based_index = 1
 
-    let solve (steps_a, steps_b) =
+    let solve steps =
       let visited_points steps =
         visited_points steps |> Hashtbl.keys |> Int_pair.Hash_set.of_list
       in
-      let points_a = visited_points steps_a in
-      let points_b = visited_points steps_b in
+      let points_a, points_b = map_pair steps ~f:visited_points in
       let intersection_without_origin =
         let result = Hash_set.inter points_a points_b in
         Hash_set.remove result (0, 0);
@@ -151,6 +151,7 @@ include Solution.Day.Make (struct
 
     let%expect_test "Part 1" =
       let case = {|
+
       R8,U5,L5,D3
       U7,R6,D4,L4
     |} in
@@ -165,9 +166,8 @@ include Solution.Day.Make (struct
 
     let one_based_index = 2
 
-    let solve (steps_a, steps_b) =
-      let distances_a = visited_points steps_a in
-      let distances_b = visited_points steps_b in
+    let solve steps =
+      let distances_a, distances_b = map_pair steps ~f:visited_points in
       let intersection_without_origin =
         let points distances = Hashtbl.keys distances |> Int_pair.Hash_set.of_list in
         let result = Hash_set.inter (points distances_a) (points distances_b) in
