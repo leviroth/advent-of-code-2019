@@ -87,7 +87,6 @@ let%expect_test "Instruction parsing" =
 
 let run_program program inputs =
   let outputs = Queue.create () in
-  let set_indirect index value = program.(program.(index)) <- value in
   let get (mode : Mode.t) index =
     program.((match mode with
              | Position -> program.(index)
@@ -96,24 +95,28 @@ let run_program program inputs =
   let rec next_index (instruction : Instruction.t) index =
     solve (Opcode.num_parameters instruction.opcode + index + 1)
   and solve index =
-    let apply_simple_op operator modes =
-      let value = operator (get modes.(0) (index + 1)) (get modes.(1) (index + 2)) in
-      set_indirect (index + 3) value
-    in
     let instruction = Instruction.of_int program.(index) in
+    let parameter offset = get instruction.modes.(offset) (index + offset + 1) in
+    let set_indirect parameter_offset value =
+      program.(program.(index + parameter_offset + 1)) <- value
+    in
+    let apply_simple_op operator =
+      let value = operator (parameter 0) (parameter 1) in
+      set_indirect 2 value
+    in
     match instruction.opcode with
     | Add ->
-      apply_simple_op ( + ) instruction.modes;
+      apply_simple_op ( + );
       next_index instruction index
     | Multiply ->
-      apply_simple_op ( * ) instruction.modes;
+      apply_simple_op ( * );
       next_index instruction index
     | Halt -> ()
     | Input ->
-      set_indirect (index + 1) (Queue.dequeue_exn inputs);
+      set_indirect 0 (Queue.dequeue_exn inputs);
       next_index instruction index
     | Output ->
-      let output = get instruction.modes.(0) (index + 1) in
+      let output = parameter 0 in
       print_s [%message (output : int)];
       Queue.enqueue outputs output;
       next_index instruction index
