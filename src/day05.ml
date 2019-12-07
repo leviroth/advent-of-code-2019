@@ -16,13 +16,6 @@ module Input = Input.Make_parseable (struct
   ;;
 end)
 
-module Output = Int
-
-let%expect_test "Parser" =
-  Input.of_string "1,0,0,0,99" |> [%sexp_of: int list] |> print_s;
-  [%expect {| (1 0 0 0 99) |}]
-;;
-
 module Mode = struct
   type t =
     | Position
@@ -120,7 +113,9 @@ let run_program program inputs =
       set_indirect (index + 1) (Queue.dequeue_exn inputs);
       next_index instruction index
     | Output ->
-      Queue.enqueue outputs (get instruction.modes.(0) (index + 1));
+      let output = get instruction.modes.(0) (index + 1) in
+      print_s [%message (output : int)];
+      Queue.enqueue outputs output;
       next_index instruction index
   in
   solve 0;
