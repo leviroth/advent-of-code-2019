@@ -2,20 +2,25 @@ open! Core
 open! Import
 
 module Common = struct
-  module Input = Input.Make_parseable (struct
-    type t = int list [@@deriving sexp]
+  module Input = struct
+    module T = struct
+      type t = int list [@@deriving sexp]
 
-    let parser =
-      let open Angstrom in
-      let integer =
-        take_while1 (function
-            | '0' .. '9' -> true
-            | _ -> false)
-        >>| int_of_string
-      in
-      sep_by (char ',') integer
-    ;;
-  end)
+      let parser =
+        let open Angstrom in
+        let integer =
+          take_while1 (function
+              | '0' .. '9' -> true
+              | _ -> false)
+          >>| int_of_string
+        in
+        sep_by (char ',') integer
+      ;;
+    end
+
+    include T
+    include Input.Make_parseable (T)
+  end
 
   let%expect_test "Parser" =
     Input.of_string "1,0,0,0,99" |> [%sexp_of: int list] |> print_s;

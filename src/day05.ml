@@ -1,21 +1,26 @@
 open! Core
 open! Import
 
-module Input = Input.Make_parseable (struct
-  type t = int list [@@deriving sexp]
+module Input = struct
+  module T = struct
+    type t = int list [@@deriving sexp]
 
-  let parser =
-    let open Angstrom in
-    let whitespace = take_while Char.is_whitespace in
-    let integer =
-      take_while1 (function
-          | '0' .. '9' | '-' -> true
-          | _ -> false)
-      >>| int_of_string
-    in
-    sep_by (char ',') (whitespace *> integer <* whitespace)
-  ;;
-end)
+    let parser =
+      let open Angstrom in
+      let whitespace = take_while Char.is_whitespace in
+      let integer =
+        take_while1 (function
+            | '0' .. '9' | '-' -> true
+            | _ -> false)
+        >>| int_of_string
+      in
+      sep_by (char ',') (whitespace *> integer <* whitespace)
+    ;;
+  end
+
+  include T
+  include Input.Make_parseable (T)
+end
 
 module Mode = struct
   type t =

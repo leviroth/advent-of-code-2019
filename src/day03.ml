@@ -55,7 +55,7 @@ module Input = struct
     ;;
   end
 
-  include Input.Make_parseable (struct
+  module T = struct
     type t = Step.t list * Step.t list [@@deriving sexp]
 
     let parser =
@@ -63,7 +63,10 @@ module Input = struct
       let parse_one = sep_by (char ',') Step.parser in
       lift2 Tuple2.create (parse_one <* char '\n') parse_one
     ;;
-  end)
+  end
+
+  include T
+  include Input.Make_parseable (T)
 
   let%expect_test "Parser" =
     let case =

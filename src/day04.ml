@@ -1,20 +1,25 @@
 open! Core
 open! Import
 
-module Input = Input.Make_parseable (struct
-  type t = int * int [@@deriving sexp]
+module Input = struct
+  module T = struct
+    type t = int * int [@@deriving sexp]
 
-  let parser =
-    let open Angstrom in
-    let integer =
-      take_while1 (function
-          | '0' .. '9' -> true
-          | _ -> false)
-      >>| int_of_string
-    in
-    lift2 Tuple2.create (integer <* char '-') integer
-  ;;
-end)
+    let parser =
+      let open Angstrom in
+      let integer =
+        take_while1 (function
+            | '0' .. '9' -> true
+            | _ -> false)
+        >>| int_of_string
+      in
+      lift2 Tuple2.create (integer <* char '-') integer
+    ;;
+  end
+
+  include T
+  include Input.Make_parseable (T)
+end
 
 let meets_criteria criteria n = List.for_all criteria ~f:(fun criterion -> criterion n)
 
