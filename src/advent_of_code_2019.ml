@@ -8,6 +8,7 @@ let days : (module Solution.Day.S) list =
   ; (module Day04)
   ; (module Day05)
   ; (module Day06)
+  ; (module Day07)
   ]
 ;;
 
