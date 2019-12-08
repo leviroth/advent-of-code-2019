@@ -2,73 +2,32 @@ open! Core
 open! Import
 
 module Common = struct
-  module Input = struct
-    module T = struct
-      type t = int list [@@deriving sexp]
-
-      let parser =
-        let open Angstrom in
-        let integer =
-          take_while1 (function
-              | '0' .. '9' -> true
-              | _ -> false)
-          >>| int_of_string
-        in
-        sep_by (char ',') integer
-      ;;
-    end
-
-    include T
-    include Input.Make_parseable (T)
-  end
-
-  let%expect_test "Parser" =
-    Input.of_string "1,0,0,0,99" |> [%sexp_of: int list] |> print_s;
-    [%expect {| (1 0 0 0 99) |}]
-  ;;
-
+  module Input = Intcode.Input
   module Output = Int
-
-  let run_program program =
-    let get_indirect index = program.(program.(index)) in
-    let set_indirect index value = program.(program.(index)) <- value in
-    let rec solve index =
-      let apply_simple_op operator =
-        let value = operator (get_indirect (index + 1)) (get_indirect (index + 2)) in
-        set_indirect (index + 3) value;
-        solve (index + 4)
-      in
-      match program.(index) with
-      | 1 -> apply_simple_op ( + )
-      | 2 -> apply_simple_op ( * )
-      | 99 -> ()
-      | opcode -> raise_s [%message "Unexpected opcode" (index : int) (opcode : int)]
-    in
-    solve 0
-  ;;
 
   let%expect_test "Run program without inputs" =
     let run_one_test input =
-      let program = Array.of_list (Input.of_string input) in
-      run_program program;
-      print_s [%message (program : int array)]
+      let program = Intcode.Input.of_string input in
+      let ({ state; _ } : Intcode.Result.t) = Intcode.run_program program ~input:[] in
+      print_s [%message (state : int list)]
     in
     [ "1,0,0,0,99"; "2,3,0,3,99"; "2,4,4,5,99,0"; "1,1,1,4,99,5,6,0,99" ]
     |> List.iter ~f:run_one_test;
     [%expect
       {|
-        (program (2 0 0 0 99))
-        (program (2 3 0 6 99))
-        (program (2 4 4 5 99 9801))
-        (program (30 1 1 4 2 5 6 0 99)) |}]
+        (state (2 0 0 0 99))
+        (state (2 3 0 6 99))
+        (state (2 4 4 5 99 9801))
+        (state (30 1 1 4 2 5 6 0 99)) |}]
   ;;
 
   let run_program_with_inputs program first second =
     let program = Array.of_list program in
     program.(1) <- first;
     program.(2) <- second;
-    run_program program;
-    program.(0)
+    let program = Array.to_list program in
+    let ({ state; _ } : Intcode.Result.t) = Intcode.run_program program ~input:[] in
+    List.hd_exn state
   ;;
 end
 
