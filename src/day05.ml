@@ -20,19 +20,14 @@ let%expect_test "Part 2" =
   [%expect
     {|
     (input 3)
-    (output 999)
     (output (999))
     (input 7)
-    (output 999)
     (output (999))
     (input 8)
-    (output 1000)
     (output (1000))
     (input 9)
-    (output 1001)
     (output (1001))
     (input 100)
-    (output 1001)
     (output (1001)) |}]
 ;;
 

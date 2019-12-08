@@ -132,7 +132,6 @@ let run_program' program inputs =
       advance instruction index
     | Output ->
       let output = parameter 0 in
-      print_s [%message (output : int)];
       Queue.enqueue outputs output;
       advance instruction index
     | Jump_if_true ->
