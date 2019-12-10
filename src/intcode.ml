@@ -111,9 +111,7 @@ module Result = struct
   [@@deriving sexp]
 end
 
-let n = ref 0
-
-let run_program' ?id program input_reader output_writer =
+let run_program' program input_reader output_writer =
   let get (mode : Mode.t) index =
     program.((match mode with
              | Position -> program.(index)
@@ -142,9 +140,8 @@ let run_program' ?id program input_reader output_writer =
       Pipe.close output_writer;
       return ()
     | Input ->
-      incr n;
       (match%bind Pipe.read input_reader with
-      | `Eof -> raise_s [%message "Unexpected EOF" (n : int ref) (id : int option)]
+      | `Eof -> raise_s [%message "Unexpected EOF"]
       | `Ok input ->
         set_indirect 0 input;
         advance instruction index)
@@ -170,9 +167,9 @@ let run_program' ?id program input_reader output_writer =
   apply_instruction 0
 ;;
 
-let run_program ?id program ~input ~output =
+let run_program program ~input ~output =
   let program = Array.of_list program in
-  let%bind () = run_program' ?id program input output in
+  let%bind () = run_program' program input output in
   return (Array.to_list program)
 ;;
 

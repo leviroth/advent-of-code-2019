@@ -99,11 +99,11 @@ let run_sequence program sequence =
   let pipes = List.zip_exn input_pipes output_pipes in
   let%bind () = connect pipes in
   let%bind () =
-    Deferred.List.iteri
+    Deferred.List.iter
       pipes
       ~how:`Parallel
-      ~f:(fun i ((input_reader, _), (_, output_writer)) ->
-        Intcode.run_program ~id:i program ~input:input_reader ~output:output_writer
+      ~f:(fun ((input_reader, _), (_, output_writer)) ->
+        Intcode.run_program program ~input:input_reader ~output:output_writer
         |> Deferred.ignore_m)
   in
   let%bind () =

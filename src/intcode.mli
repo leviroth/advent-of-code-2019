@@ -10,12 +10,7 @@ module Input : sig
   include Input.S with type t := t
 end
 
-val run_program
-  :  ?id:int
-  -> t
-  -> input:int Pipe.Reader.t
-  -> output:int Pipe.Writer.t
-  -> t Deferred.t
+val run_program : t -> input:int Pipe.Reader.t -> output:int Pipe.Writer.t -> t Deferred.t
 
 module Util : sig
   val sink : int Pipe.Writer.t
