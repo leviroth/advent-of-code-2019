@@ -29,12 +29,14 @@ module Mode = struct
   type t =
     | Position
     | Immediate
+    | Relative
   [@@deriving sexp]
 
   let of_int i =
     match i with
     | 0 -> Position
     | 1 -> Immediate
+    | 2 -> Relative
     | _ -> raise_s [%message "Unknown parameter mode" (i : int)]
   ;;
 end
@@ -50,6 +52,7 @@ module Opcode = struct
     | Less_than
     | Equals
     | Halt
+    | Adjust_relative_base
   [@@deriving sexp]
 
   let of_int i =
@@ -62,6 +65,7 @@ module Opcode = struct
     | 6 -> Jump_if_false
     | 7 -> Less_than
     | 8 -> Equals
+    | 9 -> Adjust_relative_base
     | 99 -> Halt
     | _ -> raise_s [%message "Unknown opcode" (i : int)]
   ;;
@@ -69,7 +73,7 @@ module Opcode = struct
   let num_parameters t =
     match t with
     | Halt -> 0
-    | Input | Output -> 1
+    | Input | Output | Adjust_relative_base -> 1
     | Jump_if_true | Jump_if_false -> 2
     | Add | Multiply | Less_than | Equals -> 3
   ;;
@@ -112,10 +116,12 @@ module Result = struct
 end
 
 let run_program' program input_reader output_writer =
+  let relative_base = ref 0 in
   let get (mode : Mode.t) index =
     program.((match mode with
              | Position -> program.(index)
-             | Immediate -> index))
+             | Immediate -> index
+             | Relative -> !relative_base + index))
   in
   let rec advance (instruction : Instruction.t) index =
     apply_instruction (Opcode.num_parameters instruction.opcode + index + 1)
@@ -162,6 +168,9 @@ let run_program' program input_reader output_writer =
       advance instruction index
     | Equals ->
       set_indirect 2 (Bool.to_int (parameter 0 = parameter 1));
+      advance instruction index
+    | Adjust_relative_base ->
+      relative_base := !relative_base + parameter 0;
       advance instruction index
   in
   apply_instruction 0
