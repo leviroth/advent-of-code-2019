@@ -1,9 +1,12 @@
 open! Core
+open! Async
 open! Import
+
+type t = int list [@@deriving sexp]
 
 module Input = struct
   module T = struct
-    type t = int list [@@deriving sexp]
+    type nonrec t = t [@@deriving sexp]
 
     let parser =
       let open Angstrom in
@@ -100,8 +103,17 @@ let%expect_test "Instruction parsing" =
   [%expect {| ((opcode Multiply) (modes (Position Immediate Position))) |}]
 ;;
 
-let run_program' program inputs =
-  let outputs = Queue.create () in
+module Result = struct
+  type t =
+    { state : int list
+    ; output : int list
+    }
+  [@@deriving sexp]
+end
+
+let n = ref 0
+
+let run_program' ?id program input_reader output_writer =
   let get (mode : Mode.t) index =
     program.((match mode with
              | Position -> program.(index)
@@ -126,13 +138,19 @@ let run_program' program inputs =
     | Multiply ->
       apply_simple_op ( * );
       advance instruction index
-    | Halt -> ()
+    | Halt ->
+      Pipe.close output_writer;
+      return ()
     | Input ->
-      set_indirect 0 (Queue.dequeue_exn inputs);
-      advance instruction index
+      incr n;
+      (match%bind Pipe.read input_reader with
+      | `Eof -> raise_s [%message "Unexpected EOF" (n : int ref) (id : int option)]
+      | `Ok input ->
+        set_indirect 0 input;
+        advance instruction index)
     | Output ->
       let output = parameter 0 in
-      Queue.enqueue outputs output;
+      Pipe.write_without_pushback output_writer output;
       advance instruction index
     | Jump_if_true ->
       (match parameter 0 with
@@ -149,21 +167,15 @@ let run_program' program inputs =
       set_indirect 2 (Bool.to_int (parameter 0 = parameter 1));
       advance instruction index
   in
-  apply_instruction 0;
-  outputs
+  apply_instruction 0
 ;;
 
-module Result = struct
-  type t =
-    { state : int list
-    ; output : int list
-    }
-  [@@deriving sexp]
-end
-
-let run_program program ~input : Result.t =
+let run_program ?id program ~input ~output =
   let program = Array.of_list program in
-  let input = Queue.of_list input in
-  let output = run_program' program input |> Queue.to_list in
-  { output; state = Array.to_list program }
+  let%bind () = run_program' ?id program input output in
+  return (Array.to_list program)
 ;;
+
+module Util = struct
+  let sink = Pipe.create_writer (fun _ -> return ())
+end

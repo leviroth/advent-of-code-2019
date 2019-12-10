@@ -1,18 +1,22 @@
 open! Core
+open! Async
 open! Import
 
+type t = int list [@@deriving sexp]
+
 module Input : sig
-  type t = int list [@@deriving sexp]
+  type nonrec t = t [@@deriving sexp]
 
   include Input.S with type t := t
 end
 
-module Result : sig
-  type t =
-    { state : int list
-    ; output : int list
-    }
-  [@@deriving sexp]
-end
+val run_program
+  :  ?id:int
+  -> t
+  -> input:int Pipe.Reader.t
+  -> output:int Pipe.Writer.t
+  -> t Deferred.t
 
-val run_program : int list -> input:int list -> Result.t
+module Util : sig
+  val sink : int Pipe.Writer.t
+end

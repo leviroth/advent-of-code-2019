@@ -1,15 +1,21 @@
 open! Core
+open! Async
 open! Import
 
 let run_one program phase input_signal =
-  let ({ output; _ } : Intcode.Result.t) =
-    Intcode.run_program program ~input:[ phase; input_signal ]
+  let reader, writer = Pipe.create () in
+  let%bind (_ : int list) =
+    Intcode.run_program
+      program
+      ~input:(Pipe.of_list [ phase; input_signal ])
+      ~output:writer
   in
-  List.hd_exn output
+  let%bind output = Pipe.to_list reader in
+  return (List.hd_exn output)
 ;;
 
 let run_sequence program sequence =
-  List.fold sequence ~init:0 ~f:(fun input_signal phase ->
+  Deferred.List.fold sequence ~init:0 ~f:(fun input_signal phase ->
       run_one program phase input_signal)
 ;;
 
@@ -23,43 +29,47 @@ let%expect_test "Part 1" =
       , [ 1; 0; 4; 3; 2 ] )
     ]
   in
-  List.iter inputs ~f:(fun (program, sequence) ->
-      let program = Intcode.Input.of_string program in
-      let output = run_sequence program sequence in
-      print_s [%message (output : int)]);
+  let%bind () =
+    Deferred.List.iter inputs ~f:(fun (program, sequence) ->
+        let program = Intcode.Input.of_string program in
+        let%bind output = run_sequence program sequence in
+        print_s [%message (output : int)];
+        return ())
+  in
   [%expect {|
     (output 43210)
     (output 54321)
     (output 65210) |}]
 ;;
 
-let sequences =
-  let rec permutations list =
-    match list with
-    | [] -> [ [] ]
-    | _ ->
-      List.concat_map list ~f:(fun elt ->
-          List.filter list ~f:(Fn.non (Int.equal elt))
-          |> permutations
-          |> List.map ~f:(fun permutation -> elt :: permutation))
-  in
-  List.range 0 5 |> permutations
+let rec permutations list =
+  match list with
+  | [] -> [ [] ]
+  | _ ->
+    List.concat_map list ~f:(fun elt ->
+        List.filter list ~f:(Fn.non (Int.equal elt))
+        |> permutations
+        |> List.map ~f:(fun permutation -> elt :: permutation))
 ;;
 
-module Part_1 = Solution.Part.Make (struct
+let part_1_sequences = List.range 0 5 |> permutations
+
+module Part_1 = Solution.Part.Make_async (struct
   module Input = Intcode.Input
   module Output = Int
 
   let one_based_index = 1
 
   let solve program =
-    List.map sequences ~f:(run_sequence program)
-    |> List.max_elt ~compare
-    |> Option.value_exn
+    let%bind opt =
+      Deferred.List.map part_1_sequences ~f:(run_sequence program)
+      >>| List.max_elt ~compare
+    in
+    return (Option.value_exn opt)
   ;;
 end)
 
 include Solution.Day.Make (struct
   let day_of_month = 7
-  let parts : (module Solution.Part.S) list = [ (module Part_1) ]
+  let parts = [ Part_1.command ]
 end)

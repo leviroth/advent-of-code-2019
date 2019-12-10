@@ -1,4 +1,5 @@
 open! Core
+open! Async
 open! Import
 
 let%expect_test "Part 2" =
@@ -11,12 +12,17 @@ let%expect_test "Part 2" =
     |> Intcode.Input.of_string
   in
   let test_cases = [ 3; 7; 8; 9; 100 ] in
-  List.iter test_cases ~f:(fun input ->
-      print_s [%message (input : int)];
-      let ({ output; _ } : Intcode.Result.t) =
-        Intcode.run_program program ~input:[ input ]
-      in
-      print_s [%message (output : int list)]);
+  let%bind () =
+    Deferred.List.iter test_cases ~f:(fun input ->
+        print_s [%message (input : int)];
+        let reader, writer = Pipe.create () in
+        let%bind (_ : int list) =
+          Intcode.run_program program ~input:(Pipe.of_list [ input ]) ~output:writer
+        in
+        let%bind output = Pipe.to_list reader in
+        print_s [%message (output : int list)];
+        return ())
+  in
   [%expect
     {|
     (input 3)
@@ -31,32 +37,33 @@ let%expect_test "Part 2" =
     (output (1001)) |}]
 ;;
 
+let solve program input =
+  let reader, writer = Pipe.create () in
+  let%bind (_ : int list) =
+    Intcode.run_program program ~input:(Pipe.of_list [ input ]) ~output:writer
+  in
+  let%bind output = Pipe.to_list reader in
+  return (List.last_exn output)
+;;
+
 include Solution.Day.Make (struct
   let day_of_month = 5
 
-  module Part_1 = Solution.Part.Make (struct
+  module Part_1 = Solution.Part.Make_async (struct
     module Input = Intcode.Input
     module Output = Int
 
     let one_based_index = 1
-
-    let solve program =
-      let ({ output; _ } : Intcode.Result.t) = Intcode.run_program program ~input:[ 1 ] in
-      List.last_exn output
-    ;;
+    let solve program = solve program 1
   end)
 
-  module Part_2 = Solution.Part.Make (struct
+  module Part_2 = Solution.Part.Make_async (struct
     module Input = Intcode.Input
     module Output = Int
 
     let one_based_index = 2
-
-    let solve program =
-      let ({ output; _ } : Intcode.Result.t) = Intcode.run_program program ~input:[ 5 ] in
-      List.last_exn output
-    ;;
+    let solve program = solve program 5
   end)
 
-  let parts : (module Solution.Part.S) list = [ (module Part_1); (module Part_2) ]
+  let parts = [ Part_1.command; Part_2.command ]
 end)

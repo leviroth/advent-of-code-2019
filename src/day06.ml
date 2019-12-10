@@ -59,7 +59,8 @@ K)L
   print_s [%message (graph : string list String.Map.t)];
   let count = count_orbits graph in
   print_s [%message (count : int)];
-  [%expect{|
+  [%expect
+    {|
     (graph
      ((B (C G)) (C (D)) (COM (B)) (D (E I)) (E (F J)) (G (H)) (J (K)) (K (L))))
     (count 42) |}]
@@ -113,7 +114,7 @@ let%expect_test "Part 2" =
   in
   let count = find_distance graph "YOU" "SAN" in
   print_s [%message (count : int)];
-  [%expect{| (count 4) |}]
+  [%expect {| (count 4) |}]
 ;;
 
 module Part_1 = Solution.Part.Make (struct
@@ -138,5 +139,5 @@ end)
 
 include Solution.Day.Make (struct
   let day_of_month = 6
-  let parts : (module Solution.Part.S) list = [ (module Part_1); (module Part_2) ]
+  let parts = [ Part_1.command; Part_2.command ]
 end)

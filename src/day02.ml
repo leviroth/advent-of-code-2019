@@ -1,4 +1,5 @@
 open! Core
+open! Async
 open! Import
 
 module Common = struct
@@ -8,11 +9,16 @@ module Common = struct
   let%expect_test "Run program without inputs" =
     let run_one_test input =
       let program = Intcode.Input.of_string input in
-      let ({ state; _ } : Intcode.Result.t) = Intcode.run_program program ~input:[] in
-      print_s [%message (state : int list)]
+      let%bind state =
+        Intcode.run_program program ~input:(Pipe.of_list []) ~output:Intcode.Util.sink
+      in
+      print_s [%message (state : int list)];
+      return ()
     in
-    [ "1,0,0,0,99"; "2,3,0,3,99"; "2,4,4,5,99,0"; "1,1,1,4,99,5,6,0,99" ]
-    |> List.iter ~f:run_one_test;
+    let%bind () =
+      [ "1,0,0,0,99"; "2,3,0,3,99"; "2,4,4,5,99,0"; "1,1,1,4,99,5,6,0,99" ]
+      |> Deferred.List.iter ~f:run_one_test
+    in
     [%expect
       {|
         (state (2 0 0 0 99))
@@ -26,22 +32,24 @@ module Common = struct
     program.(1) <- first;
     program.(2) <- second;
     let program = Array.to_list program in
-    let ({ state; _ } : Intcode.Result.t) = Intcode.run_program program ~input:[] in
-    List.hd_exn state
+    let%bind state =
+      Intcode.run_program program ~input:(Pipe.of_list []) ~output:Intcode.Util.sink
+    in
+    return (List.hd_exn state)
   ;;
 end
 
 include Solution.Day.Make (struct
   let day_of_month = 2
 
-  module Part_1 = Solution.Part.Make (struct
+  module Part_1 = Solution.Part.Make_async (struct
     include Common
 
     let one_based_index = 1
     let solve program = run_program_with_inputs program 12 2
   end)
 
-  module Part_2 = Solution.Part.Make (struct
+  module Part_2 = Solution.Part.Make_async (struct
     include Common
 
     let one_based_index = 2
@@ -54,14 +62,17 @@ include Solution.Day.Make (struct
             | true -> Skip (first + 1, 0)
             | false -> Yield ((first, second), (first, second + 1)))
       in
-      let noun, verb =
-        Sequence.find zig_zag ~f:(fun (first, second) ->
-            run_program_with_inputs program first second = target_output)
-        |> Option.value_exn
+      let%bind noun, verb =
+        let%bind result =
+          Deferred.Sequence.find zig_zag ~f:(fun (first, second) ->
+              let%bind output = run_program_with_inputs program first second in
+              return (output = target_output))
+        in
+        return (Option.value_exn result)
       in
-      (noun * 100) + verb
+      return ((noun * 100) + verb)
     ;;
   end)
 
-  let parts : (module Solution.Part.S) list = [ (module Part_1); (module Part_2) ]
+  let parts = [ Part_1.command; Part_2.command ]
 end)

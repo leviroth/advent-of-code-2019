@@ -1,5 +1,5 @@
 (library
  (name advent_of_code_2019)
- (libraries angstrom angstrom-unix core)
+ (libraries angstrom angstrom-unix async core)
  (preprocess (pps ppx_jane))
  (inline_tests))

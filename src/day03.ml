@@ -194,5 +194,5 @@ include Solution.Day.Make (struct
     ;;
   end)
 
-  let parts : (module Solution.Part.S) list = [ (module Part_1); (module Part_2) ]
+  let parts = [ Part_1.command; Part_2.command ]
 end)
