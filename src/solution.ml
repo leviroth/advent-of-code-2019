@@ -1,5 +1,4 @@
 open! Core
-open! Async
 open! Import
 open Solution_intf
 
@@ -29,6 +28,7 @@ module Part = struct
   end
 
   module Make_async (Solution : Asynchronous.Basic) = struct
+    open! Async
     include Solution
 
     let solve_file filename =
