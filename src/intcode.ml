@@ -117,25 +117,43 @@ end
 
 let run_program' program input_reader output_writer =
   let relative_base = ref 0 in
+  let get_direct index = Hashtbl.find program index |> Option.value ~default:0 in
   let get (mode : Mode.t) index =
-    program.((match mode with
-             | Position -> program.(index)
-             | Immediate -> index
-             | Relative -> !relative_base + index))
+    get_direct
+      (match mode with
+      | Position -> get_direct index
+      | Immediate -> index
+      | Relative -> !relative_base + get_direct index)
   in
   let rec advance (instruction : Instruction.t) index =
     apply_instruction (Opcode.num_parameters instruction.opcode + index + 1)
   and apply_instruction index =
-    let instruction = Instruction.of_int program.(index) in
+    let ({ opcode; modes } as instruction : Instruction.t) =
+      Instruction.of_int (get_direct index)
+    in
     let parameter offset = get instruction.modes.(offset) (index + offset + 1) in
-    let set_indirect parameter_offset value =
-      program.(program.(index + parameter_offset + 1)) <- value
+    let set_indirect parameter_offset data =
+      let parameter_index = index + parameter_offset + 1 in
+      let parameter = get_direct parameter_index in
+      let mode = modes.(parameter_offset) in
+      let key =
+        match mode with
+        | Position -> parameter
+        | Relative -> parameter + !relative_base
+        | Immediate ->
+          raise_s
+            [%message
+              "Unexpected Immediate mode for \"set\" parameter"
+                (index : int)
+                (instruction : Instruction.t)]
+      in
+      Hashtbl.set program ~key ~data
     in
     let apply_simple_op operator =
-      let value = operator (parameter 0) (parameter 1) in
-      set_indirect 2 value
+      let data = operator (parameter 0) (parameter 1) in
+      set_indirect 2 data
     in
-    match instruction.opcode with
+    match opcode with
     | Add ->
       apply_simple_op ( + );
       advance instruction index
@@ -177,9 +195,12 @@ let run_program' program input_reader output_writer =
 ;;
 
 let run_program program ~input ~output =
-  let program = Array.of_list program in
+  let program = List.mapi program ~f:Tuple2.create |> Int.Table.of_alist_exn in
   let%bind () = run_program' program input output in
-  return (Array.to_list program)
+  return
+    (Hashtbl.to_alist program
+    |> List.sort ~compare:(Comparable.lift compare ~f:fst)
+    |> List.map ~f:snd)
 ;;
 
 module Util = struct
