@@ -25,14 +25,17 @@ module Part_intf = struct
       val solve_input : string -> string Wrapper.t
       val command : day_of_month:int -> string * Command.t
     end
+
+    module type Make = functor (Basic : Basic) ->
+      S with type Input.t = Basic.Input.t with type Output.t = Basic.Output.t
   end
 
   module Synchronous = With_wrapped_types (Monad.Ident)
   module Asynchronous = With_wrapped_types (Deferred)
 
   module type Part = sig
-    module Make : functor (_ : Synchronous.Basic) -> Synchronous.S
-    module Make_async : functor (_ : Asynchronous.Basic) -> Asynchronous.S
+    module Make : Synchronous.Make
+    module Make_async : Asynchronous.Make
   end
 end
 
