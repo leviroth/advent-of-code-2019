@@ -31,7 +31,7 @@ let%expect_test "Part 1" =
   in
   let%bind () =
     Deferred.List.iter inputs ~f:(fun (program, sequence) ->
-        let program = Intcode.Input.of_string program in
+        let program = Intcode.Program.of_string program in
         let%bind output = run_sequence program sequence in
         print_s [%message (output : int)];
         return ())
@@ -55,7 +55,7 @@ let rec permutations list =
 let part_1_sequences = List.range 0 5 |> permutations
 
 module Part_1 = Solution.Part.Make_async (struct
-  module Input = Intcode.Input
+  module Input = Intcode.Program
   module Output = Int
 
   let one_based_index = 1
@@ -119,7 +119,7 @@ let%expect_test "Part 2" =
   in
   let%bind () =
     Deferred.List.iter inputs ~f:(fun (program, sequence) ->
-        let program = Intcode.Input.of_string program in
+        let program = Intcode.Program.of_string program in
         let%bind output = run_sequence program sequence in
         print_s [%message (output : int)];
         return ())
@@ -130,7 +130,7 @@ let%expect_test "Part 2" =
 ;;
 
 module Part_2 = Solution.Part.Make_async (struct
-  module Input = Intcode.Input
+  module Input = Intcode.Program
   module Output = Int
 
   let one_based_index = 2

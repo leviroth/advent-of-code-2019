@@ -38,7 +38,7 @@ include Solution.Day.Make (struct
   let day_of_month = 9
 
   module Common = struct
-    module Input = Intcode.Input
+    module Input = Intcode.Program
 
     module Output = struct
       type t = int list

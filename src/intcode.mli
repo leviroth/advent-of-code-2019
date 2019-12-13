@@ -4,7 +4,7 @@ open! Import
 
 type t = int list [@@deriving sexp]
 
-module Input : sig
+module Program : sig
   type nonrec t = t [@@deriving sexp]
 
   include Input.S with type t := t

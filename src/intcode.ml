@@ -4,7 +4,7 @@ open! Import
 
 type t = int list [@@deriving sexp]
 
-module Input = struct
+module Program = struct
   module T = struct
     type nonrec t = t [@@deriving sexp]
 

@@ -3,12 +3,12 @@ open! Async
 open! Import
 
 module Common = struct
-  module Input = Intcode.Input
+  module Input = Intcode.Program
   module Output = Int
 
   let%expect_test "Run program without inputs" =
     let run_one_test input =
-      let program = Intcode.Input.of_string input in
+      let program = Intcode.Program.of_string input in
       let%bind state =
         Intcode.run_program program ~input:(Pipe.of_list []) ~output:Intcode.Util.sink
       in

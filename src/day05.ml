@@ -9,7 +9,7 @@ let%expect_test "Part 2" =
 1106,0,36,98,0,0,1002,21,125,20,4,20,1105,1,46,104,
 999,1105,1,46,1101,1000,1,20,4,20,1105,1,46,98,99
 |}
-    |> Intcode.Input.of_string
+    |> Intcode.Program.of_string
   in
   let test_cases = [ 3; 7; 8; 9; 100 ] in
   let%bind () =
@@ -50,7 +50,7 @@ include Solution.Day.Make (struct
   let day_of_month = 5
 
   module Part_1 = Solution.Part.Make_async (struct
-    module Input = Intcode.Input
+    module Input = Intcode.Program
     module Output = Int
 
     let one_based_index = 1
@@ -58,7 +58,7 @@ include Solution.Day.Make (struct
   end)
 
   module Part_2 = Solution.Part.Make_async (struct
-    module Input = Intcode.Input
+    module Input = Intcode.Program
     module Output = Int
 
     let one_based_index = 2
