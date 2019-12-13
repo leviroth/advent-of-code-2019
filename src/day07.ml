@@ -7,7 +7,7 @@ let run_one program phase input_signal =
   let%bind (_ : int list) =
     Intcode.run_program
       program
-      ~input:(Pipe.of_list [ phase; input_signal ])
+      ~input:(Intcode.Input_port.of_list [ phase; input_signal ])
       ~output:writer
   in
   let%bind output = Pipe.to_list reader in
@@ -97,7 +97,8 @@ let run_sequence program sequence =
       Intcode.run_program program ~input:reader ~output:last_writer |> Deferred.ignore_m
     | [] -> assert false
   in
-  let%bind () = connect input_pipes
+  let%bind () =
+    connect (List.map input_pipes ~f:(Tuple2.map_fst ~f:Intcode.Input_port.of_pipe))
   and () =
     Pipe.iter send_to_thrusters ~f:(fun value ->
         last_value := Some value;

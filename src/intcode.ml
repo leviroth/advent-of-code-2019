@@ -107,6 +107,22 @@ let%expect_test "Instruction parsing" =
   [%expect {| ((opcode Multiply) (modes (Position Immediate Position))) |}]
 ;;
 
+module Input_port = struct
+  type t = unit -> [ `Eof | `Ok of int ] Deferred.t
+
+  let of_pipe pipe () = Pipe.read pipe
+
+  let of_list l =
+    let state = ref l in
+    fun () ->
+      match !state with
+      | [] -> return `Eof
+      | hd :: tl ->
+        state := tl;
+        return (`Ok hd)
+  ;;
+end
+
 module Result = struct
   type t =
     { state : int list
@@ -115,7 +131,7 @@ module Result = struct
   [@@deriving sexp]
 end
 
-let run_program' program input_reader output_writer =
+let run_program' program input_port output_writer =
   let relative_base = ref 0 in
   let get_direct index = Hashtbl.find program index |> Option.value ~default:0 in
   let get (mode : Mode.t) index =
@@ -164,7 +180,7 @@ let run_program' program input_reader output_writer =
       Pipe.close output_writer;
       return ()
     | Input ->
-      (match%bind Pipe.read input_reader with
+      (match%bind input_port () with
       | `Eof -> raise_s [%message "Unexpected EOF"]
       | `Ok input ->
         set_indirect 0 input;

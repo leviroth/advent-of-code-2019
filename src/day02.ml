@@ -10,7 +10,7 @@ module Common = struct
     let run_one_test input =
       let program = Intcode.Program.of_string input in
       let%bind state =
-        Intcode.run_program program ~input:(Pipe.of_list []) ~output:Intcode.Util.sink
+        Intcode.run_program program ~input:(Intcode.Input_port.of_list []) ~output:Intcode.Util.sink
       in
       print_s [%message (state : int list)];
       return ()
@@ -33,7 +33,7 @@ module Common = struct
     program.(2) <- second;
     let program = Array.to_list program in
     let%bind state =
-      Intcode.run_program program ~input:(Pipe.of_list []) ~output:Intcode.Util.sink
+      Intcode.run_program program ~input:(Intcode.Input_port.of_list []) ~output:Intcode.Util.sink
     in
     return (List.hd_exn state)
   ;;

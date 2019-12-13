@@ -17,7 +17,7 @@ let%expect_test "Part 2" =
         print_s [%message (input : int)];
         let reader, writer = Pipe.create () in
         let%bind (_ : int list) =
-          Intcode.run_program program ~input:(Pipe.of_list [ input ]) ~output:writer
+          Intcode.run_program program ~input:(Intcode.Input_port.of_list [ input ]) ~output:writer
         in
         let%bind output = Pipe.to_list reader in
         print_s [%message (output : int list)];
@@ -40,7 +40,7 @@ let%expect_test "Part 2" =
 let solve program input =
   let reader, writer = Pipe.create () in
   let%bind (_ : int list) =
-    Intcode.run_program program ~input:(Pipe.of_list [ input ]) ~output:writer
+    Intcode.run_program program ~input:(Intcode.Input_port.of_list [ input ]) ~output:writer
   in
   let%bind output = Pipe.to_list reader in
   return (List.last_exn output)

@@ -10,7 +10,14 @@ module Program : sig
   include Input.S with type t := t
 end
 
-val run_program : t -> input:int Pipe.Reader.t -> output:int Pipe.Writer.t -> t Deferred.t
+module Input_port : sig
+  type t = unit -> [ `Eof | `Ok of int ] Deferred.t
+
+  val of_pipe : int Pipe.Reader.t -> t
+  val of_list : int list -> t
+end
+
+val run_program : t -> input:Input_port.t -> output:int Pipe.Writer.t -> t Deferred.t
 
 module Util : sig
   val sink : int Pipe.Writer.t
