@@ -81,32 +81,24 @@ let run_sequence program sequence =
   in
   let _, first_writer = List.hd_exn input_pipes in
   Pipe.write_without_pushback first_writer 0;
-  let output_pipes =
-    List.length sequence |> List.init ~f:(fun (_ : int) -> Pipe.create ())
-  in
+  let last_reader, last_writer = Pipe.create () in
   let return_to_front, send_to_thrusters =
-    let reader, _writer = List.last_exn output_pipes in
-    Pipe.fork reader ~pushback_uses:`Fast_consumer_only
+    Pipe.fork last_reader ~pushback_uses:`Both_consumers
   in
   don't_wait_for (Pipe.transfer_id return_to_front first_writer);
   let rec connect pipes =
     match pipes with
-    | [] | [ _ ] -> return ()
-    | (_, (output_reader, _)) :: (((_, input_writer), _) :: _ as rest) ->
-      don't_wait_for (Pipe.transfer_id output_reader input_writer);
+    | (current_reader, _) :: ((_, next_writer) :: _ as rest) ->
+      Intcode.run_program program ~input:current_reader ~output:next_writer
+      |> Deferred.ignore_m
+      |> don't_wait_for;
       connect rest
+    | [ (reader, _writer) ] ->
+      Intcode.run_program program ~input:reader ~output:last_writer |> Deferred.ignore_m
+    | [] -> assert false
   in
-  let pipes = List.zip_exn input_pipes output_pipes in
-  let%bind () = connect pipes in
-  let%bind () =
-    Deferred.List.iter
-      pipes
-      ~how:`Parallel
-      ~f:(fun ((input_reader, _), (_, output_writer)) ->
-        Intcode.run_program program ~input:input_reader ~output:output_writer
-        |> Deferred.ignore_m)
-  in
-  let%bind () =
+  let%bind () = connect input_pipes
+  and () =
     Pipe.iter send_to_thrusters ~f:(fun value ->
         last_value := Some value;
         return ())
