@@ -44,12 +44,6 @@ let in_bounds (col, row) width height =
   0 <= col && col < width && 0 <= row && row < height
 ;;
 
-let rec gcd a b =
-  match b with
-  | 0 -> a
-  | _ -> gcd b (a mod b)
-;;
-
 let asteroids_to_check start blocker width height =
   let diff =
     let diff_col, diff_row = Int_pair.sub blocker start in
@@ -223,7 +217,7 @@ let%expect_test "Part 2" =
   in
   let answer = Input.of_string input |> Part_2.solve in
   print_s [%message (answer : int)];
-  [%expect{| (answer 802) |}]
+  [%expect {| (answer 802) |}]
 ;;
 
 include Solution.Day.Make (struct

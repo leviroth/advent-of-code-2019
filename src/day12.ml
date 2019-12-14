@@ -1,26 +1,42 @@
 open! Core
 open! Import
 
-let gravity_for_one_basis basis basis' =
-  Sign.of_int (basis' - basis) |> Sign.to_int |> ( * ) 1
-;;
+module type Vector = sig
+  type t [@@deriving sexp, compare]
 
-module Vector = struct
+  include Container.Summable with type t := t
+
+  val gravity : t -> other:t -> t
+  val energy : t -> int
+end
+
+module Vector1 = struct
+  type t = int [@@deriving sexp, compare]
+
+  let ( + ) = ( + )
+  let zero = 0
+  let gravity basis ~other = Sign.of_int (other - basis) |> Sign.to_int |> ( * ) 1
+  let energy t = abs t
+end
+
+module Vector3 = struct
   type t =
     { x : int
     ; y : int
     ; z : int
     }
-  [@@deriving sexp]
-
-  let add a b = { x = a.x + b.x; y = a.y + b.y; z = a.z + b.z }
+  [@@deriving sexp, compare, fields]
 
   let gravity t ~other =
-    { x = gravity_for_one_basis t.x other.x
-    ; y = gravity_for_one_basis t.y other.y
-    ; z = gravity_for_one_basis t.z other.z
+    { x = Vector1.gravity t.x ~other:other.x
+    ; y = Vector1.gravity t.y ~other:other.y
+    ; z = Vector1.gravity t.z ~other:other.z
     }
   ;;
+
+  let energy { x; y; z } = Vector1.energy x + Vector1.energy y + Vector1.energy z
+  let ( + ) a b = { x = a.x + b.x; y = a.y + b.y; z = a.z + b.z }
+  let zero = { x = 0; y = 0; z = 0 }
 
   let parser =
     let open Angstrom in
@@ -39,43 +55,41 @@ module Vector = struct
   ;;
 end
 
-module Moon = struct
+module Moon (Vector : Vector) = struct
   type t =
     { position : Vector.t
     ; velocity : Vector.t
     }
-  [@@deriving sexp]
+  [@@deriving sexp, compare]
+
+  let of_starting_position position = { position; velocity = Vector.zero }
 
   let update_for_gravity t ~other =
     { t with
-      velocity = Vector.add t.velocity (Vector.gravity t.position ~other:other.position)
+      velocity = Vector.( + ) t.velocity (Vector.gravity t.position ~other:other.position)
     }
   ;;
 
-  let advance t = { t with position = Vector.add t.position t.velocity }
+  let advance t = { t with position = Vector.( + ) t.position t.velocity }
+  let energy { position; velocity } = Vector.energy position * Vector.energy velocity
 
-  let energy { position; velocity } =
-    let energy ({ x; y; z } : Vector.t) = abs x + abs y + abs z in
-    energy position * energy velocity
+  let advance_all current =
+    List.mapi current ~f:(fun i moon ->
+        let others = List.filteri current ~f:(fun i' _ -> not (Int.equal i i')) in
+        let with_updated_gravity =
+          List.fold others ~init:moon ~f:(fun moon other ->
+              update_for_gravity moon ~other)
+        in
+        advance with_updated_gravity)
   ;;
 end
 
-let advance_all current =
-  List.mapi current ~f:(fun i moon ->
-      let others = List.filteri current ~f:(fun i' _ -> i <> i') in
-      let with_updated_gravity =
-        List.fold others ~init:moon ~f:(fun moon other ->
-            Moon.update_for_gravity moon ~other)
-      in
-      Moon.advance with_updated_gravity)
-;;
-
-let starting_velocity : Vector.t = { x = 0; y = 0; z = 0 }
+module Moon3 = Moon (Vector3)
 
 module Input = struct
-  type t = Vector.t list
+  type t = Vector3.t list
 
-  include Input.Make_parseable_many (Vector)
+  include Input.Make_parseable_many (Vector3)
 end
 
 module Part_1 = Solution.Part.Make (struct
@@ -85,10 +99,9 @@ module Part_1 = Solution.Part.Make (struct
   let one_based_index = 1
 
   let solve input =
-    List.map input ~f:(fun position ->
-        ({ position; velocity = starting_velocity } : Moon.t))
-    |> Fn.apply_n_times ~n:1000 advance_all
-    |> List.sum (module Int) ~f:Moon.energy
+    List.map input ~f:Moon3.of_starting_position
+    |> Fn.apply_n_times ~n:1000 Moon3.advance_all
+    |> List.sum (module Int) ~f:Moon3.energy
   ;;
 end)
 
@@ -99,10 +112,10 @@ let%expect_test "Part 1" =
 <x=4, y=-8, z=8>
 <x=3, y=5, z=-1>|}
     |> Input.of_string
-    |> List.map ~f:(fun position -> ({ position; velocity = starting_velocity } : Moon.t))
+    |> List.map ~f:Moon3.of_starting_position
   in
-  let moons = Fn.apply_n_times ~n:10 advance_all moons in
-  print_s [%message (moons : Moon.t list)];
+  let moons = Fn.apply_n_times ~n:10 Moon3.advance_all moons in
+  print_s [%message (moons : Moon3.t list)];
   [%expect
     {|
     (moons
@@ -110,12 +123,70 @@ let%expect_test "Part 1" =
       ((position ((x 1) (y -8) (z 0))) (velocity ((x -1) (y 1) (z 3))))
       ((position ((x 3) (y -6) (z 1))) (velocity ((x 3) (y 2) (z -3))))
       ((position ((x 2) (y 0) (z 4))) (velocity ((x 1) (y -1) (z -1)))))) |}];
-  let energy = List.sum (module Int) moons ~f:Moon.energy in
+  let energy = List.sum (module Int) moons ~f:Moon3.energy in
   print_s [%message (energy : int)];
   [%expect {| (energy 179) |}]
 ;;
 
+module Part_2 = Solution.Part.Make (struct
+  module Input = Input
+  module Output = Int
+
+  let one_based_index = 2
+
+  module Moon = Moon (Vector1)
+
+  module Moon_set = struct
+    module T = struct
+      type t = Moon.t list [@@deriving sexp, compare]
+    end
+
+    include T
+    include Comparable.Make (T)
+  end
+
+  let find_period positions =
+    let rec loop moons seen =
+      match Set.mem seen moons with
+      | true -> Set.length seen
+      | false ->
+        let next_moons = Moon.advance_all moons in
+        loop next_moons (Set.add seen moons)
+    in
+    loop positions Moon_set.Set.empty
+  ;;
+
+  let extract_axes moon3s =
+    List.map moon3s ~f:(fun ({ position; velocity } : Moon3.t) ->
+        let open Moon in
+        ( { position = position.x; velocity = velocity.x }
+        , { position = position.y; velocity = velocity.y }
+        , { position = position.z; velocity = velocity.z } ))
+    |> List.unzip3
+  ;;
+
+  let solve input =
+    let moon3s = List.map input ~f:Moon3.of_starting_position in
+    let x, y, z = extract_axes moon3s in
+    List.reduce_exn [ find_period x; find_period y; find_period z ] ~f:lcm
+  ;;
+end)
+
+let%expect_test "Part 2" =
+  let moons =
+    {|<x=-8, y=-10, z=0>
+<x=5, y=5, z=10>
+<x=2, y=-7, z=3>
+<x=9, y=-8, z=-3>|}
+    |> Input.of_string
+  in
+  let period = Part_2.solve moons in
+  print_s [%message (period : int)];
+  [%expect {|
+    (period 4686774924) |}]
+;;
+
 include Solution.Day.Make (struct
   let day_of_month = 12
-  let parts = [ Part_1.command ]
+  let parts = [ Part_1.command; Part_2.command ]
 end)

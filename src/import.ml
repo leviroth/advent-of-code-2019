@@ -10,3 +10,11 @@ module Int_pair = struct
 end
 
 let pad_int = sprintf "%02d"
+
+let rec gcd a b =
+  match b with
+  | 0 -> a
+  | _ -> gcd b (a mod b)
+;;
+
+let lcm a b = abs (a * b) / gcd a b
