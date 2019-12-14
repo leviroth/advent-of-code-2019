@@ -20,7 +20,15 @@ module Direction = struct
       let position = !position in
       print_s [%message (position : Int_pair.t)]
     done;
-    [%expect]
+    [%expect{|
+      (position (0 1))
+      (position (-1 0))
+      (position (0 -1))
+      (position (1 0))
+      (position (0 -1))
+      (position (-1 0))
+      (position (0 1))
+      (position (1 0)) |}]
   ;;
 
   let turn_according_to_bit t bit =
