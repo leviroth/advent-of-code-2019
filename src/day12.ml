@@ -2,7 +2,7 @@ open! Core
 open! Import
 
 module type Vector = sig
-  type t [@@deriving sexp, compare]
+  type t [@@deriving sexp, equal]
 
   include Container.Summable with type t := t
 
@@ -11,7 +11,7 @@ module type Vector = sig
 end
 
 module Vector1 = struct
-  type t = int [@@deriving sexp, compare]
+  type t = int [@@deriving sexp, equal]
 
   let ( + ) = ( + )
   let zero = 0
@@ -25,7 +25,7 @@ module Vector3 = struct
     ; y : int
     ; z : int
     }
-  [@@deriving sexp, compare, fields]
+  [@@deriving sexp, equal]
 
   let gravity t ~other =
     { x = Vector1.gravity t.x ~other:other.x
@@ -60,7 +60,7 @@ module Moon (Vector : Vector) = struct
     { position : Vector.t
     ; velocity : Vector.t
     }
-  [@@deriving sexp, compare]
+  [@@deriving sexp, equal]
 
   let of_starting_position position = { position; velocity = Vector.zero }
 
@@ -136,24 +136,14 @@ module Part_2 = Solution.Part.Make (struct
 
   module Moon = Moon (Vector1)
 
-  module Moon_set = struct
-    module T = struct
-      type t = Moon.t list [@@deriving sexp, compare]
-    end
-
-    include T
-    include Comparable.Make (T)
-  end
-
-  let find_period positions =
-    let rec loop moons seen =
-      match Set.mem seen moons with
-      | true -> Set.length seen
-      | false ->
-        let next_moons = Moon.advance_all moons in
-        loop next_moons (Set.add seen moons)
+  let find_period starting_moons =
+    let rec loop moons n =
+      let next_moons = Moon.advance_all moons in
+      match [%equal: Moon.t list] next_moons starting_moons with
+      | true -> n
+      | false -> loop next_moons (n + 1)
     in
-    loop positions Moon_set.Set.empty
+    loop starting_moons 1
   ;;
 
   let extract_axes moon3s =
