@@ -9,9 +9,9 @@ module Common = struct
   let%expect_test "Run program without inputs" =
     let run_one_test input =
       let program = Intcode.Program.of_string input in
-      let%bind state =
-        Intcode.run_program program ~input:(Intcode.Input_port.of_list []) ~output:Intcode.Util.sink
-      in
+      let program = Intcode.run_program program in
+      let%bind () = Intcode.finished program in
+      let state = Intcode.state program in
       print_s [%message (state : int list)];
       return ()
     in
@@ -32,9 +32,9 @@ module Common = struct
     program.(1) <- first;
     program.(2) <- second;
     let program = Array.to_list program in
-    let%bind state =
-      Intcode.run_program program ~input:(Intcode.Input_port.of_list []) ~output:Intcode.Util.sink
-    in
+    let program = Intcode.run_program program in
+    let%bind () = Intcode.finished program in
+    let state = Intcode.state program in
     return (List.hd_exn state)
   ;;
 end

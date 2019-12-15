@@ -3,14 +3,11 @@ open! Async
 open! Import
 
 let run_one program phase input_signal =
-  let reader, writer = Pipe.create () in
-  let%bind (_ : int list) =
-    Intcode.run_program
-      program
-      ~input:(Intcode.Input_port.of_list [ phase; input_signal ])
-      ~output:writer
-  in
-  let%bind output = Pipe.to_list reader in
+  let program = Intcode.run_program program in
+  let input = Intcode.input program in
+  Pipe.write_without_pushback input phase;
+  Pipe.write_without_pushback input input_signal;
+  let%bind output = Pipe.to_list (Intcode.output program) in
   return (List.hd_exn output)
 ;;
 
@@ -73,32 +70,29 @@ let part_2_sequences = List.range 5 10 |> permutations
 
 let run_sequence program sequence =
   let last_value = ref None in
-  let input_pipes =
+  let programs =
     List.map sequence ~f:(fun phase ->
-        let reader, writer = Pipe.create () in
-        Pipe.write_without_pushback writer phase;
-        reader, writer)
+        let program = Intcode.run_program program in
+        Pipe.write_without_pushback (Intcode.input program) phase;
+        program)
   in
-  let _, first_writer = List.hd_exn input_pipes in
-  Pipe.write_without_pushback first_writer 0;
-  let last_reader, last_writer = Pipe.create () in
+  let first_input = List.hd_exn programs |> Intcode.input in
+  Pipe.write_without_pushback first_input 0;
+  let last_output = List.last_exn programs |> Intcode.output in
   let return_to_front, send_to_thrusters =
-    Pipe.fork last_reader ~pushback_uses:`Both_consumers
+    Pipe.fork last_output ~pushback_uses:`Both_consumers
   in
-  don't_wait_for (Pipe.transfer_id return_to_front first_writer);
-  let rec connect pipes =
-    match pipes with
-    | (current_reader, _) :: ((_, next_writer) :: _ as rest) ->
-      Intcode.run_program program ~input:current_reader ~output:next_writer
-      |> Deferred.ignore_m
-      |> don't_wait_for;
+  don't_wait_for (Pipe.transfer_id return_to_front first_input);
+  let rec connect programs =
+    match programs with
+    | out_program :: (in_program :: _ as rest) ->
+      don't_wait_for
+        (Pipe.transfer_id (Intcode.output out_program) (Intcode.input in_program));
       connect rest
-    | [ (reader, _writer) ] ->
-      Intcode.run_program program ~input:reader ~output:last_writer |> Deferred.ignore_m
-    | [] -> assert false
+    | [] | [ _ ] -> ()
   in
-  let%bind () =
-    connect (List.map input_pipes ~f:(Tuple2.map_fst ~f:Intcode.Input_port.of_pipe))
+  connect programs;
+  let%bind () = Deferred.all_unit (List.map programs ~f:Intcode.finished)
   and () =
     Pipe.iter send_to_thrusters ~f:(fun value ->
         last_value := Some value;

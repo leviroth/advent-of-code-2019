@@ -20,7 +20,8 @@ module Direction = struct
       let position = !position in
       print_s [%message (position : Int_pair.t)]
     done;
-    [%expect{|
+    [%expect
+      {|
       (position (0 1))
       (position (-1 0))
       (position (0 -1))
@@ -62,17 +63,17 @@ let do_robot_things (type a) (part : a Part.t) program =
       | One -> []
       | Two -> [ !position ])
   in
-  let input_reader, input_writer = Pipe.create () in
-  let output_reader, output_writer = Pipe.create () in
-  let input_port = Intcode.Input_port.of_pipe input_reader in
   let bail () : a Deferred.t =
     match part with
     | One -> return (Hash_set.length ever_touched)
     | Two -> return tiles
   in
+  let program = Intcode.run_program program in
   let rec loop direction =
-    Pipe.write_without_pushback input_writer (Hash_set.mem tiles !position |> Bool.to_int);
-    let%bind paint = Pipe.read output_reader in
+    Pipe.write_without_pushback
+      (Intcode.input program)
+      (Hash_set.mem tiles !position |> Bool.to_int);
+    let%bind paint = Pipe.read (Intcode.output program) in
     match paint with
     | `Eof -> bail ()
     | `Ok bit ->
@@ -80,7 +81,7 @@ let do_robot_things (type a) (part : a Part.t) program =
       | true -> Hash_set.add tiles !position
       | false -> Hash_set.remove tiles !position);
       Hash_set.add ever_touched !position;
-      let%bind turn_bit = Pipe.read output_reader in
+      let%bind turn_bit = Pipe.read (Intcode.output program) in
       (match turn_bit with
       | `Eof -> bail ()
       | `Ok bit ->
@@ -88,9 +89,6 @@ let do_robot_things (type a) (part : a Part.t) program =
         position := Int_pair.add !position new_direction;
         loop new_direction)
   in
-  Intcode.run_program program ~input:input_port ~output:output_writer
-  |> Deferred.ignore_m
-  |> don't_wait_for;
   loop direction
 ;;
 

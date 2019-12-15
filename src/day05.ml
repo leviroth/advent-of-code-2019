@@ -15,11 +15,9 @@ let%expect_test "Part 2" =
   let%bind () =
     Deferred.List.iter test_cases ~f:(fun input ->
         print_s [%message (input : int)];
-        let reader, writer = Pipe.create () in
-        let%bind (_ : int list) =
-          Intcode.run_program program ~input:(Intcode.Input_port.of_list [ input ]) ~output:writer
-        in
-        let%bind output = Pipe.to_list reader in
+        let program = Intcode.run_program program in
+        Pipe.write_without_pushback (Intcode.input program) input;
+        let%bind output = Pipe.to_list (Intcode.output program) in
         print_s [%message (output : int list)];
         return ())
   in
@@ -38,11 +36,9 @@ let%expect_test "Part 2" =
 ;;
 
 let solve program input =
-  let reader, writer = Pipe.create () in
-  let%bind (_ : int list) =
-    Intcode.run_program program ~input:(Intcode.Input_port.of_list [ input ]) ~output:writer
-  in
-  let%bind output = Pipe.to_list reader in
+  let program = Intcode.run_program program in
+  Pipe.write_without_pushback (Intcode.input program) input;
+  let%bind output = Pipe.to_list (Intcode.output program) in
   return (List.last_exn output)
 ;;
 

@@ -2,11 +2,9 @@ open! Core
 open! Async
 open! Import
 
-type t = int list [@@deriving sexp]
-
 module Program = struct
   module T = struct
-    type nonrec t = t [@@deriving sexp]
+    type t = int list [@@deriving sexp]
 
     let parser =
       let open Angstrom in
@@ -107,33 +105,25 @@ let%expect_test "Instruction parsing" =
   [%expect {| ((opcode Multiply) (modes (Position Immediate Position))) |}]
 ;;
 
-module Input_port = struct
-  type t = unit -> [ `Eof | `Ok of int ] Deferred.t
+type t =
+  { state : int Int.Table.t
+  ; input : int Pipe.Reader.t * int Pipe.Writer.t
+  ; output : int Pipe.Reader.t * int Pipe.Writer.t
+  }
 
-  let of_pipe pipe () = Pipe.read pipe
+let state { state; _ } =
+  Hashtbl.to_alist state
+  |> List.sort ~compare:(Comparable.lift compare ~f:fst)
+  |> List.map ~f:snd
+;;
 
-  let of_list l =
-    let state = ref l in
-    fun () ->
-      match !state with
-      | [] -> return `Eof
-      | hd :: tl ->
-        state := tl;
-        return (`Ok hd)
-  ;;
-end
+let input { input = _, input_writer; _ } = input_writer
+let output { output = output_reader, _; _ } = output_reader
+let finished { output = output_reader, _; _ } = Pipe.closed output_reader
 
-module Result = struct
-  type t =
-    { state : int list
-    ; output : int list
-    }
-  [@@deriving sexp]
-end
-
-let run_program' program input_port output_writer =
+let run_program' { state; input = input_reader, _; output = _, output_writer } =
   let relative_base = ref 0 in
-  let get_direct index = Hashtbl.find program index |> Option.value ~default:0 in
+  let get_direct index = Hashtbl.find state index |> Option.value ~default:0 in
   let get (mode : Mode.t) index =
     get_direct
       (match mode with
@@ -163,7 +153,7 @@ let run_program' program input_port output_writer =
                 (index : int)
                 (instruction : Instruction.t)]
       in
-      Hashtbl.set program ~key ~data
+      Hashtbl.set state ~key ~data
     in
     let apply_simple_op operator =
       let data = operator (parameter 0) (parameter 1) in
@@ -180,7 +170,7 @@ let run_program' program input_port output_writer =
       Pipe.close output_writer;
       return ()
     | Input ->
-      (match%bind input_port () with
+      (match%bind Pipe.read input_reader with
       | `Eof -> raise_s [%message "Unexpected EOF"]
       | `Ok input ->
         set_indirect 0 input;
@@ -210,15 +200,9 @@ let run_program' program input_port output_writer =
   apply_instruction 0
 ;;
 
-let run_program program ~input ~output =
-  let program = List.mapi program ~f:Tuple2.create |> Int.Table.of_alist_exn in
-  let%bind () = run_program' program input output in
-  return
-    (Hashtbl.to_alist program
-    |> List.sort ~compare:(Comparable.lift compare ~f:fst)
-    |> List.map ~f:snd)
+let run_program program =
+  let state = List.mapi program ~f:Tuple2.create |> Int.Table.of_alist_exn in
+  let t = { state; input = Pipe.create (); output = Pipe.create () } in
+  don't_wait_for (run_program' t);
+  t
 ;;
-
-module Util = struct
-  let sink = Pipe.create_writer (fun _ -> return ())
-end
