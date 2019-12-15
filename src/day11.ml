@@ -70,9 +70,7 @@ let do_robot_things (type a) (part : a Part.t) program =
   in
   let program = Intcode.run_program program in
   let rec loop direction =
-    Pipe.write_without_pushback
-      (Intcode.input program)
-      (Hash_set.mem tiles !position |> Bool.to_int);
+    Intcode.input program (Hash_set.mem tiles !position |> Bool.to_int);
     let%bind paint = Pipe.read (Intcode.output program) in
     match paint with
     | `Eof -> bail ()

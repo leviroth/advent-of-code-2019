@@ -107,9 +107,12 @@ let%expect_test "Instruction parsing" =
 
 type t =
   { state : int Int.Table.t
-  ; input : int Pipe.Reader.t * int Pipe.Writer.t
+  ; input : (unit -> [ `Eof | `Ok of int ] Deferred.t) * (int -> unit)
   ; output : int Pipe.Reader.t * int Pipe.Writer.t
+  ; awaiting_input : unit Mvar.Read_write.t
   }
+
+let awaiting_input { awaiting_input; _ } = Mvar.value_available awaiting_input
 
 let state { state; _ } =
   Hashtbl.to_alist state
@@ -121,7 +124,9 @@ let input { input = _, input_writer; _ } = input_writer
 let output { output = output_reader, _; _ } = output_reader
 let finished { output = output_reader, _; _ } = Pipe.closed output_reader
 
-let run_program' { state; input = input_reader, _; output = _, output_writer } =
+let run_program'
+    { state; input = input_reader, _; output = _, output_writer; awaiting_input }
+  =
   let relative_base = ref 0 in
   let get_direct index = Hashtbl.find state index |> Option.value ~default:0 in
   let get (mode : Mode.t) index =
@@ -170,7 +175,8 @@ let run_program' { state; input = input_reader, _; output = _, output_writer } =
       Pipe.close output_writer;
       return ()
     | Input ->
-      (match%bind Pipe.read input_reader with
+      let%bind () = Mvar.put awaiting_input () in
+      (match%bind input_reader () with
       | `Eof -> raise_s [%message "Unexpected EOF"]
       | `Ok input ->
         set_indirect 0 input;
@@ -201,8 +207,16 @@ let run_program' { state; input = input_reader, _; output = _, output_writer } =
 ;;
 
 let run_program program =
+  let awaiting_input = Mvar.create () in
+  let input =
+    let reader, writer = Pipe.create () in
+    ( (fun () -> Pipe.read reader)
+    , fun value ->
+        let (_ : unit option) = Mvar.take_now awaiting_input in
+        Pipe.write_without_pushback writer value )
+  in
   let state = List.mapi program ~f:Tuple2.create |> Int.Table.of_alist_exn in
-  let t = { state; input = Pipe.create (); output = Pipe.create () } in
+  let t = { state; input; output = Pipe.create (); awaiting_input } in
   don't_wait_for (run_program' t);
   t
 ;;

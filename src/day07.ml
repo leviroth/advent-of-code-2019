@@ -5,8 +5,8 @@ open! Import
 let run_one program phase input_signal =
   let program = Intcode.run_program program in
   let input = Intcode.input program in
-  Pipe.write_without_pushback input phase;
-  Pipe.write_without_pushback input input_signal;
+  input phase;
+  input input_signal;
   let%bind output = Pipe.to_list (Intcode.output program) in
   return (List.hd_exn output)
 ;;
@@ -73,21 +73,23 @@ let run_sequence program sequence =
   let programs =
     List.map sequence ~f:(fun phase ->
         let program = Intcode.run_program program in
-        Pipe.write_without_pushback (Intcode.input program) phase;
+        Intcode.input program phase;
         program)
   in
   let first_input = List.hd_exn programs |> Intcode.input in
-  Pipe.write_without_pushback first_input 0;
+  first_input 0;
   let last_output = List.last_exn programs |> Intcode.output in
   let return_to_front, send_to_thrusters =
     Pipe.fork last_output ~pushback_uses:`Both_consumers
   in
-  don't_wait_for (Pipe.transfer_id return_to_front first_input);
+  don't_wait_for (Pipe.iter_without_pushback return_to_front ~f:first_input);
   let rec connect programs =
     match programs with
     | out_program :: (in_program :: _ as rest) ->
       don't_wait_for
-        (Pipe.transfer_id (Intcode.output out_program) (Intcode.input in_program));
+        (Pipe.iter_without_pushback
+           (Intcode.output out_program)
+           ~f:(Intcode.input in_program));
       connect rest
     | [] | [ _ ] -> ()
   in

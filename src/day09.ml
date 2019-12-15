@@ -25,7 +25,7 @@ let%expect_test "Part 1" =
 
 let solve program input =
   let program = Intcode.run_program program in
-  Pipe.write_without_pushback (Intcode.input program) input;
+  (Intcode.input program) input;
   Pipe.to_list (Intcode.output program)
 ;;
 
