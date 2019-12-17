@@ -129,6 +129,10 @@ let rec requirements term resources graph =
             | Some n -> n + spare) ))
 ;;
 
+let cost graph quantity =
+  requirements { Term.chemical = "FUEL"; quantity } String.Map.empty graph |> fst
+;;
+
 module Part_1 = Solution.Part.Make (struct
   module Input = Input
   module Output = Int
@@ -137,7 +141,41 @@ module Part_1 = Solution.Part.Make (struct
 
   let solve input =
     let graph = Input.to_graph input in
-    requirements { Term.chemical = "FUEL"; quantity = 1 } String.Map.empty graph |> fst
+    cost graph 1
+  ;;
+end)
+
+module Part_2 = Solution.Part.Make (struct
+  module Input = Input
+  module Output = Int
+
+  let one_based_index = 2
+  let ore = 1000000000000
+
+  let solve input =
+    let graph = Input.to_graph input in
+    let upper_bound =
+      let rec loop candidate =
+        match cost graph candidate < ore with
+        | false -> candidate
+        | true -> loop (candidate * 2)
+      in
+      loop 1
+    in
+    let rec loop lower_bound upper_bound =
+      match lower_bound <> upper_bound with
+      | false -> lower_bound
+      | true ->
+        let candidate = (lower_bound + upper_bound) / 2 in
+        (match Ordering.of_int (compare (cost graph candidate) ore) with
+        | Equal -> candidate
+        | Greater -> loop lower_bound (candidate - 1)
+        | Less ->
+          (match cost graph (candidate + 1) < ore with
+          | false -> candidate
+          | true -> loop (candidate + 1) upper_bound))
+    in
+    loop 1 upper_bound
   ;;
 end)
 
@@ -146,7 +184,24 @@ let%expect_test "Part 1" =
   [%expect {| 31 |}]
 ;;
 
+let%expect_test "Part 2" =
+  let input =
+    {|157 ORE => 5 NZVS
+165 ORE => 6 DCFZ
+44 XJWVT, 5 KHKGT, 1 QDVJ, 29 NZVS, 9 GPVTF, 48 HKGWZ => 1 FUEL
+12 HKGWZ, 1 GPVTF, 8 PSHF => 9 QDVJ
+179 ORE => 7 PSHF
+177 ORE => 5 HKGWZ
+7 DCFZ, 7 PSHF => 2 XJWVT
+165 ORE => 2 GPVTF
+3 DCFZ, 7 NZVS, 5 HKGWZ, 10 PSHF => 8 KHKGT
+|}
+  in
+  Part_2.solve_input input |> print_endline;
+  [%expect {| 82892753 |}]
+;;
+
 include Solution.Day.Make (struct
   let day_of_month = 14
-  let parts = [ Part_1.command ]
+  let parts = [ Part_1.command; Part_2.command ]
 end)
