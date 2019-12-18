@@ -76,7 +76,51 @@ let%expect_test "Part 1" =
     (69317163492948606335995924319873 52432133) |}]
 ;;
 
+let compute_sneaky input =
+  let offset =
+    List.take input 7 |> List.map ~f:Int.to_string |> String.concat |> Int.of_string
+  in
+  let repeated_input = List.range 0 10_000 |> List.concat_map ~f:(fun _ -> input) in
+  let tail = List.drop repeated_input offset in
+  let reversed = List.rev tail in
+  let one_step l =
+    List.folding_map l ~init:0 ~f:(fun a b ->
+        let output = abs ((a + b) mod 10) in
+        output, output)
+  in
+  Fn.apply_n_times ~n:100 one_step reversed |> List.rev
+;;
+
+module Part_2 = Solution.Part.Make (struct
+  module Input = Input
+  module Output = String
+
+  let one_based_index = 2
+
+  let solve input =
+    let full_result = compute_sneaky input in
+    List.take full_result 8 |> List.map ~f:Int.to_string |> String.concat
+  ;;
+end)
+
+let%expect_test "Part 2" =
+  let inputs =
+    [ "03036732577212944063491565474664"
+    ; "02935109699940807407585447034323"
+    ; "03081770884921959731165446850517"
+    ]
+  in
+  List.iter inputs ~f:(fun input ->
+      let output = Part_2.solve_input input in
+      print_s [%message input output]);
+  [%expect
+    {|
+    (03036732577212944063491565474664 84462026)
+    (02935109699940807407585447034323 78725270)
+    (03081770884921959731165446850517 53553731) |}]
+;;
+
 include Solution.Day.Make (struct
   let day_of_month = 16
-  let parts = [ Part_1.command ]
+  let parts = [ Part_1.command; Part_2.command ]
 end)
