@@ -40,13 +40,12 @@ module Input = struct
   let load filename = In_channel.read_all filename |> String.strip |> of_string
 end
 
-let starting_square (grid : Input.t) =
+let starting_squares (grid : Input.t) =
   Map.to_alist grid
-  |> List.find_map ~f:(function location, square ->
+  |> List.filter_map ~f:(function location, square ->
          (match square with
          | Start -> Some location
          | _ -> None))
-  |> Option.value_exn
 ;;
 
 let keys (grid : Input.t) =
@@ -59,8 +58,15 @@ let locations_by_key grid =
   keys grid |> Map.to_alist |> List.map ~f:Tuple2.swap |> Char.Map.of_alist_exn
 ;;
 
+let right_vectors = [ 1, 0; 0, 1; -1, 0; 0, -1 ]
+
+let diagonal_vectors =
+  let l = [ 1; -1 ] in
+  List.cartesian_product l l
+;;
+
 let neighbors (grid : Input.t) location =
-  List.map [ 1, 0; 0, 1; -1, 0; 0, -1 ] ~f:(Int_pair.add location)
+  List.map right_vectors ~f:(Int_pair.add location)
   |> List.filter ~f:(function location ->
          (match Map.find_exn grid location with
          | Wall -> false
@@ -114,7 +120,7 @@ let%expect_test _ =
   let grid = Input.of_string {|#########
 #b.A.@.a#
 #########|} in
-  let starting_square = starting_square grid in
+  let starting_square = starting_squares grid |> List.hd_exn in
   distance grid starting_square
   |> [%sexp_of: (int * Char.Set.t) Int_pair.Map.t]
   |> print_s;
@@ -124,9 +130,10 @@ let%expect_test _ =
 let all_distances grid =
   let locations_by_key = locations_by_key grid in
   let alist : (Int_pair.t * (int * Char.Set.t) Int_pair.Map.t) list =
-    (let starting_square = starting_square grid in
-     starting_square, distance grid starting_square)
-    :: (Map.data locations_by_key |> List.map ~f:(fun key -> key, distance grid key))
+    (starting_squares grid
+    |> List.map ~f:(fun starting_square -> starting_square, distance grid starting_square)
+    )
+    @ (Map.data locations_by_key |> List.map ~f:(fun key -> key, distance grid key))
   in
   Int_pair.Map.of_alist_exn alist
 ;;
@@ -134,7 +141,7 @@ let all_distances grid =
 module State = struct
   module T = struct
     type t =
-      { current : Int_pair.t
+      { current : Int_pair.t list
       ; collected_keys : char list
       }
     [@@deriving hash, sexp, compare]
@@ -148,6 +155,8 @@ module State = struct
   ;;
 end
 
+let update_list l idx value = List.take l idx @ [ value ] @ List.drop l (idx + 1)
+
 let solve grid start =
   let key_distances = all_distances grid in
   let locations_by_key = locations_by_key grid in
@@ -157,7 +166,6 @@ let solve grid start =
     match Hashtbl.find costs state with
     | Some cost -> cost
     | None ->
-      let distances_from_current = Map.find_exn key_distances current in
       let uncollected_keys = State.uncollected_keys state ~all_keys in
       (match Set.is_empty uncollected_keys with
       | true -> 0
@@ -165,7 +173,12 @@ let solve grid start =
         let reachable_now =
           let doors target =
             let target_location = Map.find_exn locations_by_key target in
-            Map.find_exn distances_from_current target_location |> snd |> Set.to_list
+            List.find_map current ~f:(fun robot ->
+                let distances_from_robot = Map.find_exn key_distances robot in
+                Map.find distances_from_robot target_location)
+            |> Option.value_exn
+            |> snd
+            |> Set.to_list
           in
           Set.filter uncollected_keys ~f:(fun key ->
               List.for_all (doors key) ~f:(fun door ->
@@ -175,14 +188,20 @@ let solve grid start =
         let best =
           List.map reachable_now ~f:(fun target ->
               let location = Map.find_exn locations_by_key target in
+              let robot_to_move, distance =
+                List.find_mapi current ~f:(fun i robot ->
+                    let distances_from_robot = Map.find_exn key_distances robot in
+                    Map.find distances_from_robot location
+                    |> Option.map ~f:(fun distance -> i, fst distance))
+                |> Option.value_exn
+              in
               let new_state : State.t =
-                { current = location
+                { current = update_list current robot_to_move location
                 ; collected_keys =
                     List.merge ~compare:Char.compare [ target ] collected_keys
                 }
               in
-              cost_of_uncollected_keys new_state
-              + (Map.find_exn distances_from_current location |> fst))
+              cost_of_uncollected_keys new_state + distance)
           |> List.min_elt ~compare
           |> Option.value_exn
         in
@@ -192,10 +211,21 @@ let solve grid start =
   cost_of_uncollected_keys { current = start; collected_keys = [] }
 ;;
 
-let%expect_test _ =
+module Part_1 = Solution.Part.Make (struct
+  module Input = Input
+  module Output = Int
+
+  let one_based_index = 1
+
+  let solve input =
+    let start = starting_squares input in
+    solve input start
+  ;;
+end)
+
+let%expect_test "Part 1" =
   let grid =
-    Input.of_string
-      {|#################
+    {|#################
 #i.G..c...e..H.p#
 ########.########
 #j.A..b...f..D.o#
@@ -205,24 +235,45 @@ let%expect_test _ =
 #l.F..d...h..C.m#
 #################|}
   in
-  let start = starting_square grid in
-  solve grid start |> printf "%d";
+  Part_1.solve_input grid |> print_endline;
   [%expect {| 136 |}]
 ;;
 
-module Part_1 = Solution.Part.Make (struct
+module Part_2 = Solution.Part.Make (struct
   module Input = Input
   module Output = Int
 
-  let one_based_index = 1
+  let one_based_index = 2
 
   let solve input =
-    let start = starting_square input in
-    solve input start
+    let start = starting_squares input |> List.hd_exn in
+    let to_walls = start :: List.map right_vectors ~f:(Int_pair.add start) in
+    let starts = List.map diagonal_vectors ~f:(Int_pair.add start) in
+    let grid =
+      List.fold starts ~init:input ~f:(fun grid key -> Map.set grid ~key ~data:Start)
+    in
+    let grid =
+      List.fold to_walls ~init:grid ~f:(fun grid key -> Map.set grid ~key ~data:Wall)
+    in
+    solve grid starts
   ;;
 end)
 
+let%expect_test "Part 2" =
+  let grid =
+    {|#############
+#DcBa.#.GhKl#
+#.###...#I###
+#e#d#.@.#j#k#
+###C#...###J#
+#fEbA.#.FgHi#
+#############|}
+  in
+  Part_2.solve_input grid |> print_endline;
+  [%expect {| 32 |}]
+;;
+
 include Solution.Day.Make (struct
   let day_of_month = 18
-  let parts = [ Part_1.command ]
+  let parts = [ Part_1.command; Part_2.command ]
 end)
