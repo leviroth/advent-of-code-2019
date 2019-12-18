@@ -8,6 +8,7 @@ module Square = struct
     | Key of char
     | Door of char
     | Start
+  [@@deriving equal]
 
   let of_char c =
     match c with
@@ -95,8 +96,9 @@ let distance (grid : Input.t) start =
                 Map.add_exn map ~key:neighbor ~data:(Some location))
           in
           match Map.find_exn grid location with
-          | Key c ->
-            ( (new_visited, Map.add_exn results ~key:c ~data:(path_info visited location))
+          | Key _ ->
+            ( ( new_visited
+              , Map.add_exn results ~key:location ~data:(path_info visited location) )
             , neighbors )
           | _ -> (new_visited, results), neighbors)
       |> Tuple2.map_snd ~f:List.concat
@@ -105,7 +107,7 @@ let distance (grid : Input.t) start =
     | true -> new_results
     | false -> loop new_frontier new_visited new_results
   in
-  loop [ start ] (Int_pair.Map.singleton start None) Char.Map.empty
+  loop [ start ] (Int_pair.Map.singleton start None) Int_pair.Map.empty
 ;;
 
 let%expect_test _ =
@@ -113,38 +115,26 @@ let%expect_test _ =
 #b.A.@.a#
 #########|} in
   let starting_square = starting_square grid in
-  distance grid starting_square |> [%sexp_of: (int * Char.Set.t) Char.Map.t] |> print_s;
-  [%expect {| ((A (2 ())) (B (4 (A)))) |}]
+  distance grid starting_square
+  |> [%sexp_of: (int * Char.Set.t) Int_pair.Map.t]
+  |> print_s;
+  [%expect {| (((1 1) (4 (A))) ((7 1) (2 ()))) |}]
 ;;
 
-module Move_start_location = struct
-  module T = struct
-    type t =
-      | Key of char
-      | Start
-    [@@deriving sexp, compare, hash]
-  end
-
-  include T
-  include Comparable.Make (T)
-  include Hashable.Make (T)
-end
-
 let all_distances grid =
-  let alist : (Move_start_location.t * (int * Char.Set.t) Char.Map.t) list =
-    (Start, distance grid (starting_square grid))
-    :: (locations_by_key grid
-       |> Map.map ~f:(distance grid)
-       |> Map.to_alist
-       |> List.map ~f:(Tuple2.map_fst ~f:(fun c -> Move_start_location.Key c)))
+  let locations_by_key = locations_by_key grid in
+  let alist : (Int_pair.t * (int * Char.Set.t) Int_pair.Map.t) list =
+    (let starting_square = starting_square grid in
+     starting_square, distance grid starting_square)
+    :: (Map.data locations_by_key |> List.map ~f:(fun key -> key, distance grid key))
   in
-  Move_start_location.Map.of_alist_exn alist
+  Int_pair.Map.of_alist_exn alist
 ;;
 
 module State = struct
   module T = struct
     type t =
-      { current : Move_start_location.t
+      { current : Int_pair.t
       ; collected_keys : char list
       }
     [@@deriving hash, sexp, compare]
@@ -158,52 +148,48 @@ module State = struct
   ;;
 end
 
-let solve key_distances =
-  let all_keys =
-    Map.key_set key_distances
-    |> Set.to_list
-    |> List.filter_map ~f:(function
-           | Move_start_location.Key c -> Some c
-           | Start -> None)
-    |> Char.Set.of_list
-  in
+let solve grid start =
+  let key_distances = all_distances grid in
+  let locations_by_key = locations_by_key grid in
+  let all_keys = locations_by_key |> Map.key_set in
   let costs = State.Table.create () in
   let rec cost_of_uncollected_keys ({ current; collected_keys } as state : State.t) =
     match Hashtbl.find costs state with
     | Some cost -> cost
     | None ->
+      let distances_from_current = Map.find_exn key_distances current in
       let uncollected_keys = State.uncollected_keys state ~all_keys in
       (match Set.is_empty uncollected_keys with
       | true -> 0
       | false ->
         let reachable_now =
           let doors target =
-            let map = Map.find_exn key_distances current in
-            Map.find_exn map target |> snd
+            let target_location = Map.find_exn locations_by_key target in
+            Map.find_exn distances_from_current target_location |> snd |> Set.to_list
           in
           Set.filter uncollected_keys ~f:(fun key ->
-              Set.for_all (doors key) ~f:(fun door -> not (Set.mem uncollected_keys door)))
+              List.for_all (doors key) ~f:(fun door ->
+                  not (Set.mem uncollected_keys door)))
           |> Set.to_list
         in
         let best =
           List.map reachable_now ~f:(fun target ->
+              let location = Map.find_exn locations_by_key target in
               let new_state : State.t =
-                { current = Key target
+                { current = location
                 ; collected_keys =
                     List.merge ~compare:Char.compare [ target ] collected_keys
                 }
               in
               cost_of_uncollected_keys new_state
-              +
-              let map = Map.find_exn key_distances current in
-              Map.find_exn map target |> fst)
+              + (Map.find_exn distances_from_current location |> fst))
           |> List.min_elt ~compare
           |> Option.value_exn
         in
         Hashtbl.set costs ~key:state ~data:best;
         best)
   in
-  cost_of_uncollected_keys { current = Start; collected_keys = [] }
+  cost_of_uncollected_keys { current = start; collected_keys = [] }
 ;;
 
 let%expect_test _ =
@@ -219,7 +205,8 @@ let%expect_test _ =
 #l.F..d...h..C.m#
 #################|}
   in
-  all_distances grid |> solve |> printf "%d";
+  let start = starting_square grid in
+  solve grid start |> printf "%d";
   [%expect {| 136 |}]
 ;;
 
@@ -228,7 +215,11 @@ module Part_1 = Solution.Part.Make (struct
   module Output = Int
 
   let one_based_index = 1
-  let solve = Fn.compose solve all_distances
+
+  let solve input =
+    let start = starting_square input in
+    solve input start
+  ;;
 end)
 
 include Solution.Day.Make (struct
