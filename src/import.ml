@@ -45,3 +45,4 @@ let rec gcd a b =
 ;;
 
 let lcm a b = abs (a * b) / gcd a b
+let option_value_exn x = Option.value_exn x
