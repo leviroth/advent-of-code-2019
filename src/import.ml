@@ -7,6 +7,8 @@ module Int_pair = struct
 
   let add (a_1, b_1) (a_2, b_2) = a_1 + a_2, b_1 + b_2
   let sub (a_1, b_1) (a_2, b_2) = a_1 - a_2, b_1 - b_2
+  let neighbors t directions = List.map directions ~f:(add t)
+  let right_vectors = [ 1, 0; 0, 1; -1, 0; 0, -1 ]
 
   let print_set set =
     let range coordinates =

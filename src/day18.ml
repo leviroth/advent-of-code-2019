@@ -58,15 +58,13 @@ let locations_by_key grid =
   keys grid |> Map.to_alist |> List.map ~f:Tuple2.swap |> Char.Map.of_alist_exn
 ;;
 
-let right_vectors = [ 1, 0; 0, 1; -1, 0; 0, -1 ]
-
 let diagonal_vectors =
   let l = [ 1; -1 ] in
   List.cartesian_product l l
 ;;
 
 let neighbors (grid : Input.t) location =
-  List.map right_vectors ~f:(Int_pair.add location)
+  Int_pair.neighbors location Int_pair.right_vectors
   |> List.filter ~f:(function location ->
          (match Map.find_exn grid location with
          | Wall -> false
@@ -247,7 +245,7 @@ module Part_2 = Solution.Part.Make (struct
 
   let solve input =
     let start = starting_squares input |> List.hd_exn in
-    let to_walls = start :: List.map right_vectors ~f:(Int_pair.add start) in
+    let to_walls = start :: Int_pair.neighbors start Int_pair.right_vectors in
     let starts = List.map diagonal_vectors ~f:(Int_pair.add start) in
     let grid =
       List.fold starts ~init:input ~f:(fun grid key -> Map.set grid ~key ~data:Start)
