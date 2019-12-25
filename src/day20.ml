@@ -128,10 +128,10 @@ module Make (Coordinate : sig
 
   include Comparable.S with type t := t
 
-  val at_destination : Input.t -> t -> bool
-  val neighbors_without_portals : t -> t list
-  val destination : Input.t -> t -> t option
   val start : Input.t -> t
+  val at_destination : Input.t -> t -> bool
+  val direct_neighbors : t -> t list
+  val apply_grid_and_portals : Input.t -> t -> t option
 end) =
 struct
   let solve (input : Input.t) =
@@ -143,8 +143,8 @@ struct
         | true -> depth - 1
         | false ->
           let neighbors =
-            Coordinate.neighbors_without_portals hd
-            |> List.filter_map ~f:(Coordinate.destination input)
+            Coordinate.direct_neighbors hd
+            |> List.filter_map ~f:(Coordinate.apply_grid_and_portals input)
             |> List.filter ~f:(Fn.non (Set.mem visited))
           in
           loop
@@ -169,9 +169,9 @@ module Part_1 = Solution.Part.Make (struct
       Square.equal (Map.find_exn grid t) (Portal "ZZ")
     ;;
 
-    let neighbors_without_portals t = Int_pair.neighbors t Int_pair.right_vectors
+    let direct_neighbors t = Int_pair.neighbors t Int_pair.right_vectors
 
-    let destination ({ grid; portals; _ } : Input.t) location =
+    let apply_grid_and_portals ({ grid; portals; _ } : Input.t) location =
       match%bind.Option Map.find grid location with
       | Wall -> None
       | Path | Portal "ZZ" -> Some location
@@ -183,11 +183,11 @@ module Part_1 = Solution.Part.Make (struct
                | false -> Some exit)
     ;;
 
-    let%expect_test "Destination" =
+    let%expect_test "Go through portal" =
       let input = Input.of_string test_input in
-      let destination = destination input (9, 7) in
-      print_s [%message (destination : Int_pair.t option)];
-      [%expect {| (destination ((2 8))) |}]
+      let location = apply_grid_and_portals input (9, 7) in
+      print_s [%message (location : Int_pair.t option)];
+      [%expect {| (location ((2 8))) |}]
     ;;
 
     let start ({ portals; _ } : Input.t) = Map.find_exn portals "AA" |> List.hd_exn |> snd
@@ -268,12 +268,15 @@ module Part_2 = Solution.Part.Make (struct
       Square.equal (Map.find_exn grid location) (Portal "ZZ") && level = 0
     ;;
 
-    let neighbors_without_portals { location; level } =
+    let direct_neighbors { location; level } =
       Int_pair.neighbors location Int_pair.right_vectors
       |> List.map ~f:(fun location -> { location; level })
     ;;
 
-    let destination ({ grid; portals; max_x; max_y } : Input.t) { location; level } =
+    let apply_grid_and_portals
+        ({ grid; portals; max_x; max_y } : Input.t)
+        { location; level }
+      =
       let portal_direction (x, y) =
         match
           List.exists [ 0; 1; max_x - 1; max_x ] ~f:(equal x)
