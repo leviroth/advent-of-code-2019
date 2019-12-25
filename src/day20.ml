@@ -95,18 +95,6 @@ module Input = struct
             }))
   ;;
 
-  let destination { grid; portals; _ } location =
-    match%bind.Option Map.find grid location with
-    | Wall -> None
-    | Path | Portal "ZZ" -> Some location
-    | Portal portal_name ->
-      Map.find_exn portals portal_name
-      |> List.find_map ~f:(fun (entrance, exit) ->
-             match Int_pair.equal location entrance with
-             | true -> None
-             | false -> Some exit)
-  ;;
-
   let of_string = Fn.compose of_raw raw_of_string
   let load = Fn.compose of_string In_channel.read_all
 end
@@ -135,43 +123,77 @@ FG..#########.....#
 |}
 ;;
 
-let%expect_test "Parse" =
-  let input = Input.of_string test_input in
-  [%expect {| |}];
-  let destination = Input.destination input (9, 7) in
-  print_s [%message (destination : Int_pair.t option)];
-  [%expect {| (destination ((2 8))) |}]
-;;
+module Make (Coordinate : sig
+  type t
 
-let find_distance (t : Input.t) =
-  let rec loop frontier next_frontier visited depth =
-    match frontier with
-    | [] -> loop next_frontier [] visited (depth + 1)
-    | hd :: tl ->
-      (match Map.find_exn t.grid hd with
-      | Portal "ZZ" -> depth - 1
-      | _ ->
-        let neighbors =
-          Int_pair.neighbors hd Int_pair.right_vectors
-          |> List.filter ~f:(Fn.non (Set.mem visited))
-          |> List.filter_map ~f:(Input.destination t)
-        in
-        loop
-          tl
-          (neighbors @ next_frontier)
-          (List.fold neighbors ~init:visited ~f:Set.add)
-          depth)
-  in
-  let start = Map.find_exn t.portals "AA" |> List.hd_exn |> snd in
-  loop [ start ] [] Int_pair.Set.empty 0
-;;
+  include Comparable.S with type t := t
+
+  val at_destination : Input.t -> t -> bool
+  val neighbors_without_portals : t -> t list
+  val destination : Input.t -> t -> t option
+  val start : Input.t -> t
+end) =
+struct
+  let solve (input : Input.t) =
+    let rec loop (frontier : Coordinate.t list) next_frontier visited depth =
+      match frontier with
+      | [] -> loop next_frontier [] visited (depth + 1)
+      | hd :: tl ->
+        (match Coordinate.at_destination input hd with
+        | true -> depth - 1
+        | false ->
+          let neighbors =
+            Coordinate.neighbors_without_portals hd
+            |> List.filter_map ~f:(Coordinate.destination input)
+            |> List.filter ~f:(Fn.non (Set.mem visited))
+          in
+          loop
+            tl
+            (neighbors @ next_frontier)
+            (List.fold neighbors ~init:visited ~f:Set.add)
+            depth)
+    in
+    let start = Coordinate.start input in
+    loop [ start ] [] Coordinate.Set.empty 0
+  ;;
+end
 
 module Part_1 = Solution.Part.Make (struct
   module Input = Input
   module Output = Int
 
   let one_based_index = 1
-  let solve = find_distance
+
+  include Make (struct
+    let at_destination ({ grid; _ } : Input.t) t =
+      Square.equal (Map.find_exn grid t) (Portal "ZZ")
+    ;;
+
+    let neighbors_without_portals t = Int_pair.neighbors t Int_pair.right_vectors
+
+    let destination ({ grid; portals; _ } : Input.t) location =
+      match%bind.Option Map.find grid location with
+      | Wall -> None
+      | Path | Portal "ZZ" -> Some location
+      | Portal portal_name ->
+        Map.find_exn portals portal_name
+        |> List.find_map ~f:(fun (entrance, exit) ->
+               match Int_pair.equal location entrance with
+               | true -> None
+               | false -> Some exit)
+    ;;
+
+    let%expect_test "Destination" =
+      let input = Input.of_string test_input in
+      let destination = destination input (9, 7) in
+      print_s [%message (destination : Int_pair.t option)];
+      [%expect {| (destination ((2 8))) |}]
+    ;;
+
+    let start ({ portals; _ } : Input.t) = Map.find_exn portals "AA" |> List.hd_exn |> snd
+
+    include Int_pair
+  end)
 end)
 
 let%expect_test "Part 1" =
@@ -225,93 +247,76 @@ YN......#               VT..#....QG
   [%expect {| 58 |}]
 ;;
 
-module Part_2_coordinate = struct
-  module T = struct
-    type t =
-      { location : Int_pair.t
-      ; level : int
-      }
-    [@@deriving sexp, compare]
-  end
-
-  include T
-  include Comparable.Make (T)
-end
-
-let destination
-    ({ grid; portals; max_x; max_y } : Input.t)
-    ({ location; level } : Part_2_coordinate.t)
-  =
-  let portal_direction (x, y) =
-    match
-      List.exists [ 0; 1; max_x - 1; max_x ] ~f:(equal x)
-      || List.exists [ 0; 1; max_y - 1; max_y ] ~f:(equal y)
-    with
-    | true -> `Outer
-    | false -> `Inner
-  in
-  match%bind.Option Map.find grid location with
-  | Wall -> None
-  | Path -> Some ({ location; level } : Part_2_coordinate.t)
-  | Portal "ZZ" ->
-    (match level with
-    | 0 -> Some { location; level }
-    | _ -> None)
-  | Portal portal_name ->
-    let%bind.Option new_location =
-      Map.find_exn portals portal_name
-      |> List.find_map ~f:(fun (entrance, exit) ->
-             match Int_pair.equal location entrance with
-             | true -> None
-             | false -> Some exit)
-    in
-    (match portal_direction location with
-    | `Inner ->
-      Some ({ location = new_location; level = level + 1 } : Part_2_coordinate.t)
-    | `Outer ->
-      (match level with
-      | 0 -> None
-      | _ -> Some { location = new_location; level = level - 1 }))
-;;
-
-let find_distance (t : Input.t) =
-  let rec loop (frontier : Part_2_coordinate.t list) next_frontier visited depth =
-    match frontier with
-    | [] -> loop next_frontier [] visited (depth + 1)
-    | { location; level } :: tl ->
-      (match Square.equal (Map.find_exn t.grid location) (Portal "ZZ") && level = 0 with
-      | true -> depth - 1
-      | false ->
-        let neighbors =
-          Int_pair.neighbors location Int_pair.right_vectors
-          |> List.map ~f:(fun location -> ({ location; level } : Part_2_coordinate.t))
-          |> List.filter_map ~f:(destination t)
-          |> List.filter ~f:(Fn.non (Set.mem visited))
-        in
-        loop
-          tl
-          (neighbors @ next_frontier)
-          (List.fold neighbors ~init:visited ~f:Set.add)
-          depth)
-  in
-  let start : Part_2_coordinate.t =
-    let location = Map.find_exn t.portals "AA" |> List.hd_exn |> snd in
-    { location; level = 0 }
-  in
-  loop [ start ] [] Part_2_coordinate.Set.empty 0
-;;
-
 module Part_2 = Solution.Part.Make (struct
   module Input = Input
   module Output = Int
 
   let one_based_index = 2
-  let solve = find_distance
+
+  include Make (struct
+    module T = struct
+      type t =
+        { location : Int_pair.t
+        ; level : int
+        }
+      [@@deriving sexp, compare]
+    end
+
+    include T
+
+    let at_destination ({ grid; _ } : Input.t) { location; level } =
+      Square.equal (Map.find_exn grid location) (Portal "ZZ") && level = 0
+    ;;
+
+    let neighbors_without_portals { location; level } =
+      Int_pair.neighbors location Int_pair.right_vectors
+      |> List.map ~f:(fun location -> { location; level })
+    ;;
+
+    let destination ({ grid; portals; max_x; max_y } : Input.t) { location; level } =
+      let portal_direction (x, y) =
+        match
+          List.exists [ 0; 1; max_x - 1; max_x ] ~f:(equal x)
+          || List.exists [ 0; 1; max_y - 1; max_y ] ~f:(equal y)
+        with
+        | true -> `Outer
+        | false -> `Inner
+      in
+      match%bind.Option Map.find grid location with
+      | Wall -> None
+      | Path -> Some { location; level }
+      | Portal "ZZ" ->
+        (match level with
+        | 0 -> Some { location; level }
+        | _ -> None)
+      | Portal portal_name ->
+        let%bind.Option new_location =
+          Map.find_exn portals portal_name
+          |> List.find_map ~f:(fun (entrance, exit) ->
+                 match Int_pair.equal location entrance with
+                 | true -> None
+                 | false -> Some exit)
+        in
+        (match portal_direction location with
+        | `Inner -> Some { location = new_location; level = level + 1 }
+        | `Outer ->
+          (match level with
+          | 0 -> None
+          | _ -> Some { location = new_location; level = level - 1 }))
+    ;;
+
+    let start ({ portals; _ } : Input.t) =
+      let location = Map.find_exn portals "AA" |> List.hd_exn |> snd in
+      { location; level = 0 }
+    ;;
+
+    include Comparable.Make (T)
+  end)
 end)
 
 let%expect_test _ =
   Part_2.solve_input test_input |> print_endline;
-  [%expect{| 26 |}]
+  [%expect {| 26 |}]
 ;;
 
 include Solution.Day.Make (struct
